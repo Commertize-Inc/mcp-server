@@ -1,0 +1,43 @@
+{
+	"name": "commertize-mcp-server",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Commertize Agents MCP server: Commertize public marketplace data (offerings, news, sponsors) as typed, read-only tools for AI agents.",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/Commertize-Inc/mcp-server.git"
+	},
+	"homepage": "https://github.com/Commertize-Inc/mcp-server#readme",
+	"bugs": {
+		"url": "https://github.com/Commertize-Inc/mcp-server/issues"
+	},
+	"license": "Apache-2.0",
+	"type": "module",
+	"bin": {
+		"commertize-mcp-server": "dist/index.js",
+		"commertize-mcp-http": "dist/httpMain.js"
+	},
+	"main": "dist/index.js",
+	"engines": {
+		"node": ">=20.10"
+	},
+	"scripts": {
+		"build": "tsc",
+		"start": "node dist/index.js",
+		"start:http": "node dist/httpMain.js",
+		"test:http": "node test/http-e2e.mjs",
+		"typecheck": "tsc --noEmit",
+		"test": "npm run build && node test/run-all.mjs",
+		"test:live": "node test/stdio-e2e.mjs",
+		"test:offline": "node test/api-down.mjs",
+		"test:language": "node test/language-check.mjs"
+	},
+	"dependencies": {
+		"@modelcontextprotocol/sdk": "^1.30.0",
+		"zod": "^4.4.3"
+	},
+	"devDependencies": {
+		"@types/node": "^24.10.1",
+		"typescript": "^5.9.3"
+	}
+}

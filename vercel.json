@@ -1,0 +1,26 @@
+{
+	"$schema": "https://openapi.vercel.sh/vercel.json",
+	"installCommand": "npm ci",
+	"buildCommand": "npm run build",
+	"outputDirectory": "public",
+	"functions": {
+		"api/*.js": {
+			"includeFiles": "content/**",
+			"maxDuration": 30
+		}
+	},
+	"rewrites": [
+		{ "source": "/mcp", "destination": "/api/mcp" },
+		{ "source": "/health", "destination": "/api/health" }
+	],
+	"headers": [
+		{
+			"source": "/(.*)",
+			"headers": [
+				{ "key": "Cache-Control", "value": "no-store" },
+				{ "key": "X-Content-Type-Options", "value": "nosniff" },
+				{ "key": "X-Robots-Tag", "value": "noindex" }
+			]
+		}
+	]
+}

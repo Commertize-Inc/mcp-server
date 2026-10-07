@@ -61,7 +61,7 @@ const STATUS_LABELS: Record<string, string> = {
 	TOKENIZING: "Tokenizing — structuring and minting in progress",
 	ACTIVE: "Active — open for subscription by verified investors",
 	FULLY_FUNDED: "Fully funded — closed to new subscriptions",
-	DISTRIBUTED: "Distributed — escrow released",
+	DISTRIBUTED: "Distributed — escrow released and tokens distributed",
 	REFUNDED: "Refunded — escrow returned to subscribers",
 	REJECTED: "Rejected",
 	WITHDRAWN: "Withdrawn by sponsor",

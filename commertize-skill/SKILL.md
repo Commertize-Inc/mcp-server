@@ -103,10 +103,11 @@ research.
 - Each asset sits in its own special-purpose vehicle (SPV). A token is a membership
   interest in that SPV, not direct title to the asset. Where the SPV carries debt, the
   token tracks the equity residual — which is why the leverage disclosure matters.
-- Subscriptions settle into an escrow contract; funds release to the sponsor only on a
-  successful close, and a failed raise refunds through the same contract.
-- Distributions, where an offering makes them, are administered on-chain. Terms are
-  per-offering and live in that offering's documents.
+- Each distribution the issuer declares is calculated and recorded per holder. Frequency
+  and waterfall terms are set per offering and are disclosed in that offering's
+  documents.
+- A token moves only between wallets verified in the identity registry or exempted by
+  the platform; minting needs a verified or exempt receiver.
 
 ## 6. Verification and who may participate
 

@@ -6,12 +6,7 @@ not in this file._
 
 ## What Commertize is
 
-Commertize is a digital capital markets platform for real-world assets. It handles the
-full lifecycle of an asset-backed private offering: structuring the asset into a legal
-vehicle, issuing the economic rights as on-chain tokens, verifying and onboarding
-investors under the applicable exemption, settling subscriptions on-chain against
-escrow, and administering the position afterwards — reporting, distributions, and
-transfer controls.
+Commertize is a digital capital markets platform for real-world assets. Sponsors list offerings on it, and investors complete identity verification on the platform before they can take part.
 
 Tokenization is one layer of that stack, not the product. The product is the
 infrastructure a private offering needs in order to exist and be administered

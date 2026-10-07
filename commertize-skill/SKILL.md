@@ -5,10 +5,7 @@ description: Read the Commertize marketplace of tokenized real-world assets — 
 
 # Commertize
 
-Commertize is a digital capital markets platform for real-world assets: it structures
-an asset into a legal vehicle, issues the economic rights as on-chain tokens, verifies
-and onboards investors under the applicable securities exemption, settles subscriptions
-against escrow, and administers the position afterwards.
+Commertize is a digital capital markets platform for real-world assets. Sponsors list offerings on it, and investors complete identity verification on the platform before they can take part.
 
 This skill covers the **public, read-only** surface. Everything below can be called
 with no credentials. There is no authenticated route, no key, and no action that moves

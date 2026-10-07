@@ -9,8 +9,8 @@ not in this file._
 Commertize is a digital capital markets platform for real-world assets. Sponsors list offerings on it, and investors complete identity verification on the platform before they can take part.
 
 Tokenization is one layer of that stack, not the product. The product is the
-infrastructure a private offering needs in order to exist and be administered
-programmatically.
+infrastructure a private offering needs: an on-chain register, investor
+eligibility checks and escrowed subscriptions.
 
 Commertize provides software infrastructure for private capital markets. Nothing
 returned by this tool is an offer, a solicitation, or a recommendation to buy or sell

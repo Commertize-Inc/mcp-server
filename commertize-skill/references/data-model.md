@@ -7,7 +7,7 @@
 | `TOKENIZING` | Entities and contracts being finalised, tokens being minted | No |
 | `ACTIVE` | Live offering, accepting subscriptions from verified investors | **Yes** |
 | `FULLY_FUNDED` | Allocation reached, closed to new subscriptions | No |
-| `DISTRIBUTED` | Escrow released to the sponsor | No |
+| `DISTRIBUTED` | Escrow released and tokens distributed | No |
 | `REFUNDED` | Escrow returned to subscribers | No |
 | `FROZEN` | Halted | No |
 | `PENDING_REVIEW`, `REJECTED`, `WITHDRAWN` | Not publicly viewable | No |

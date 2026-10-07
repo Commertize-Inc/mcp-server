@@ -11,10 +11,7 @@ the two sponsor-services writes (`request_memo`, `file_sponsor_inquiry`), and th
 `sandbox_*` / `x402_*` groups — each behind its own explicit opt-in flag. See
 [What is actually live](#what-is-actually-live) and [Configuration](#configuration-all-optional-sane-defaults-point-at-production).
 
-Commertize is a digital capital markets platform for real-world assets: it structures
-an asset into a legal vehicle, issues the economic interest as an on-chain token,
-verifies investors and sponsors under the applicable securities exemption, settles
-subscriptions against escrow, and administers the position afterwards. This server is
+Commertize is a digital capital markets platform for real-world assets. Sponsors list offerings on it, and investors complete identity verification on the platform before they can take part. This server is
 the read surface of that platform, nothing more.
 
 **Free. No API key. No account.** Every default tool reads a route that is public and

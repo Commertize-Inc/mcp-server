@@ -35,11 +35,11 @@ Commertize does not pool assets across listings.
   the leverage ratio against the asset's appraised value, purchase price, or
   acquisition cost. Where nothing has been disclosed, the platform shows
   "Not disclosed" — it never renders an undisclosed listing as unlevered.
-- Subscriptions settle into an escrow contract. Funds are released to the sponsor only
-  on a successful close; a failed raise refunds subscribers through the same contract.
-- Distributions, when an offering makes them, are administered on-chain through a
-  distribution vault. Frequency and waterfall terms are set per offering and are
-  disclosed in that offering's documents.
+- Each distribution the issuer declares is calculated and recorded per holder. Frequency
+  and waterfall terms are set per offering and are disclosed in that offering's
+  documents.
+- A token moves only between wallets verified in the identity registry or exempted by
+  the platform; minting needs a verified or exempt receiver.
 
 ## Exemptions and who can participate
 
@@ -99,7 +99,7 @@ enabled it against an API that serves it.
 
 ## On-chain status
 
-Smart contracts (asset tokens, escrow, distribution vault, compliance and transfer
+Smart contracts (asset tokens, distribution vault, compliance and transfer
 controls) are deployed to test networks. Any listing state served here
 reflects the platform's records for the environment it is running against.
 

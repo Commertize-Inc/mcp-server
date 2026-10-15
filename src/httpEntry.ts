@@ -10,6 +10,7 @@ import { config } from "./config.js";
 import { KeyVerifier } from "./httpAuth.js";
 import { FixedWindowLimiter } from "./httpRateLimit.js";
 import { createHttpHandler, type HttpLogEvent, type NodeHandler } from "./httpServer.js";
+import { analyticsConfigFrom, createAnalyticsSink } from "./analytics.js";
 import { createPublicHttpHandler } from "./httpPublic.js";
 import { createServer } from "./index.js";
 
@@ -53,9 +54,12 @@ export const buildPublicHandler = (
 	createPublicHttpHandler({
 		enabled: () => !config.publicDisabled,
 		ipLimiter: new FixedWindowLimiter(config.publicRequestsPerIpPerMinute, 60_000),
-		createServer: () => createServer("public"),
+		createServer: (onToolResult) => createServer("public", onToolResult),
 		log,
 		maxBodyBytes: config.httpMaxBodyBytes,
+		// PostHog, off unless COMMERTIZE_MCP_ANALYTICS=1 and a phc_ key are set
+		// (analytics.ts). Null sink = nothing is sent.
+		afterResponse: createAnalyticsSink(analyticsConfigFrom(config.analyticsEnv, VERSION)) ?? undefined,
 	});
 
 export const publicHandler: NodeHandler = buildPublicHandler();

@@ -166,7 +166,9 @@ const firewallUnavailable = (
 
 export const registerTools = (
 	server: McpServer,
-	surface: ToolSurface = "stdio"
+	surface: ToolSurface = "stdio",
+	// Public surface only: sees each (disclaimer-swapped) result, for analytics.
+	onToolResult?: (tool: string, r: CallToolResult) => void
 ): void => {
 	/*
 	 * Every registration below goes through `register`. On the stdio and
@@ -184,7 +186,15 @@ export const registerTools = (
 			server,
 			name,
 			cfg,
-			async (...a: unknown[]) => withPublicDisclaimer((await cb(...a)) as CallToolResult)
+			async (...a: unknown[]) => {
+				const r = withPublicDisclaimer((await cb(...a)) as CallToolResult);
+				try {
+					onToolResult?.(name, r);
+				} catch {
+					/* an observer never changes a result */
+				}
+				return r;
+			}
 		);
 	}) as unknown as McpServer["registerTool"];
 

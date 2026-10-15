@@ -8,6 +8,7 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 import { config } from "./config.js";
 import { registerInquiryTool } from "./inquiryTool.js";
@@ -29,7 +30,10 @@ import {
  *   registered over HTTP whatever their gates say — and `httpServer.ts`
  *   refuses them by name on top, so a slip here is still a 403.
  */
-export const createServer = (surface: ToolSurface = "stdio"): McpServer => {
+export const createServer = (
+	surface: ToolSurface = "stdio",
+	onToolResult?: (tool: string, r: CallToolResult) => void
+): McpServer => {
 	/*
 	 * The no-login public surface (`/mcp/public`, publicSurface.ts): the three
 	 * reads that return data today and nothing else. No `instructions` string:
@@ -41,7 +45,7 @@ export const createServer = (surface: ToolSurface = "stdio"): McpServer => {
 			{ name: "commertize", version: "0.1.0" },
 			{ capabilities: { tools: {} } }
 		);
-		registerTools(pub, "public");
+		registerTools(pub, "public", onToolResult);
 		return pub;
 	}
 	const server = new McpServer(

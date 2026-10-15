@@ -286,7 +286,7 @@ section("6. no credential, protocol hygiene, clean log");
 
 	const req = events.filter((e) => e.event === "public_request");
 	check("every request is logged once with method, path, status, outcome, ms", req.length > 20 && req.every((e) => e.method && e.path && typeof e.status === "number" && e.outcome && typeof e.ms === "number"));
-	check("initialize logs the sanitised client family", req.some((e) => e.client === "test-client"));
+	check("initialize logs the sanitised client family", req.some((e) => e.client_name === "test-client" && e.client_version === "0"));
 	const blob = JSON.stringify(events);
 	check("no event carries the Authorization value", !blob.includes("cfa_0123456789abcdef") && !blob.includes("Bearer"));
 	check("no event carries a client IP", !/198\.51\.100\.|203\.0\.113\.|2001:db8/.test(blob));

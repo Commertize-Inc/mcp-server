@@ -69,3 +69,10 @@ export const clientNameOf = (raw: unknown): string => {
 	const t = raw.trim();
 	return /^[A-Za-z0-9._-]{1,40}$/.test(t) ? t : "unknown";
 };
+
+/** `clientInfo.version`, same idea: [A-Za-z0-9._+-], at most 20, else null. */
+export const clientVersionOf = (raw: unknown): string | null => {
+	if (typeof raw !== "string") return null;
+	const t = raw.trim();
+	return /^[A-Za-z0-9._+-]{1,20}$/.test(t) ? t : null;
+};

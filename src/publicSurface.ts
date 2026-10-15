@@ -12,11 +12,19 @@
  * forge-axiom-agent-adoption-mcp-contracts-2026-10-15 §1). Adding a name here
  * is a reviewed change, like `httpAllowlist.ts`.
  *
- * Every response on this surface carries the certified directory disclaimer
- * below in place of the server-wide one (RUNE 2026-10-15, AXIOM set D).
+ * Every response on this surface carries D-1 (AXIOM ruling 2026-10-15 §3),
+ * enforced by `withPublicDisclaimer` on every result, error included. The
+ * directory text apx-92c1f4514d ("This listing is reference information…")
+ * is for directory listing fields and README line 5 only: on a tool response
+ * "listing" reads as an offering listing, so it never appears here.
  */
 
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+
+import { config } from "./config.js";
+import { DISCLAIMER, DISCLAIMER_ID } from "./disclaimer.js";
+import { withDisclaimerBlock } from "./disclaimerBlock.js";
 
 export const PUBLIC_TOOL_NAMES = ["get_news", "get_article", "platform_info"] as const;
 
@@ -25,10 +33,9 @@ export const PUBLIC_TOOL_SET: ReadonlySet<string> = new Set<string>(PUBLIC_TOOL_
 export const isPublicTool = (name: unknown): name is string =>
 	typeof name === "string" && PUBLIC_TOOL_SET.has(name);
 
-/** AXIOM-certified, byte-exact. Id = apx- + sha1(UTF-8 bytes)[:10]. */
-export const PUBLIC_DISCLAIMER =
-	"This listing is reference information. It is not an offer to sell or a solicitation of an offer to buy any security.";
-export const PUBLIC_DISCLAIMER_ID = "apx-92c1f4514d";
+/** D-1, the same constant as the server-wide DISCLAIMER (AXIOM §3). */
+export const PUBLIC_DISCLAIMER = DISCLAIMER;
+export const PUBLIC_DISCLAIMER_ID = DISCLAIMER_ID;
 
 /**
  * Replace the envelope's `disclaimer` with the public one, and re-render the
@@ -56,6 +63,60 @@ export const withPublicDisclaimer = (r: CallToolResult): CallToolResult => {
 		...r,
 		content: [{ type: "text", text: JSON.stringify(structured, null, 2) }],
 		structuredContent: structured,
+	};
+};
+
+/**
+ * SDK-built tool errors on the public surface (AEGIS PR #4 F4-2).
+ *
+ * The SDK validates arguments BEFORE the registered callback runs, and on
+ * failure returns its own `{content:[text], isError:true}` with no envelope,
+ * so `withPublicDisclaimer` never sees it (PoC: get_article with no slug,
+ * get_news with limit 1000). Here `McpServer.createToolError` is replaced on
+ * the PUBLIC instance only, so those results carry the same envelope, D-1 and
+ * the disclaimer_block. Every tool a public request can reach is one of
+ * PUBLIC_TOOL_NAMES (anything else is 403 before dispatch), and all three are
+ * certified for the block. The keyed and stdio surfaces keep the SDK's
+ * protocol-error shape, which gates-e2e pins on purpose.
+ *
+ * `createToolError` is private in the SDK's types. public-e2e asserts the
+ * envelope on a real validation error, so an SDK change that renamed it would
+ * fail the suite rather than silently drop the disclaimer.
+ */
+export const publicToolError = (message: string): CallToolResult => {
+	const structured = {
+		as_of: new Date().toISOString(),
+		source_url: config.apiBaseUrl,
+		cache: { hit: false, age_seconds: 0, stale: false },
+		disclaimer: PUBLIC_DISCLAIMER,
+		error: {
+			code: /Input validation error/.test(message) ? "INVALID_ARGUMENT" : "INTERNAL_ERROR",
+			message,
+			retryable: false,
+		},
+	};
+	return withDisclaimerBlock({
+		content: [{ type: "text", text: JSON.stringify(structured, null, 2) }],
+		structuredContent: structured,
+		isError: true,
+	});
+};
+
+export const envelopeSdkToolErrors = (
+	server: McpServer,
+	onToolResult?: (tool: string, r: CallToolResult) => void
+): void => {
+	(server as unknown as { createToolError: (m: string) => CallToolResult }).createToolError = (
+		message: string
+	) => {
+		const r = publicToolError(message);
+		try {
+			// The tool name is not known here; the observer reads only the code.
+			onToolResult?.("(sdk)", r);
+		} catch {
+			/* an observer never changes a result */
+		}
+		return r;
 	};
 };
 

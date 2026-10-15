@@ -12,6 +12,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 import { config } from "./config.js";
 import { registerInquiryTool } from "./inquiryTool.js";
+import { envelopeSdkToolErrors } from "./publicSurface.js";
 import { registerSandboxTools } from "./sandboxTools.js";
 import { registerScreenerTools } from "./screenerTools.js";
 import { registerX402Tools } from "./x402Tools.js";
@@ -46,6 +47,7 @@ export const createServer = (
 			{ capabilities: { tools: {} } }
 		);
 		registerTools(pub, "public", onToolResult);
+		envelopeSdkToolErrors(pub, onToolResult);
 		return pub;
 	}
 	const server = new McpServer(

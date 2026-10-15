@@ -178,6 +178,20 @@ export const createPublicHttpHandler = (o: PublicHandlerOptions): NodeHandler =>
 				}
 			}
 
+			/*
+			 * ONE MESSAGE PER COUNTED REQUEST (AEGIS PR #4 F4-1). The limiter
+			 * above charged this HTTP request once; a JSON-RPC batch would let
+			 * that one charge fan out to hundreds of upstream GETs (PoC: 500
+			 * get_article calls in one POST = 500 upstream hits) and exhaust the
+			 * backend's shared news limiter for every surface. MCP 2025-06-18
+			 * removed batching, so any array is refused whole, before dispatch.
+			 */
+			if (Array.isArray(parsed)) {
+				outcome = "batch_refused";
+				send(400, rpcError(null, -32600, "Invalid Request"));
+				return;
+			}
+
 			const server = o.createServer((_tool, r) => {
 				// Only the envelope's own machine code, never its message.
 				const code = (r.structuredContent as { error?: { code?: unknown } } | undefined)?.error?.code;

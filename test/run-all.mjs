@@ -40,6 +40,7 @@ const SUITES = [
 	["streamable http e2e (stub upstream)", "http-e2e.mjs", { live: false }],
 	["client ip /64 bucketing (offline)", "client-ip.mjs", { live: false }],
 	["public no-login endpoint e2e (stub upstream)", "public-e2e.mjs", { live: false }],
+	["tokenizability_check e2e (stub upstream)", "scorecard-e2e.mjs", { live: false }],
 	["language", "language-check.mjs", { live: false }],
 ];
 

@@ -12,6 +12,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { config } from "./config.js";
 import { registerInquiryTool } from "./inquiryTool.js";
 import { envelopeSdkToolErrors } from "./publicSurface.js";
+import { envelopeScorecardSdkErrors, registerScorecardTool } from "./scorecardTool.js";
 import { registerSandboxTools } from "./sandboxTools.js";
 import { registerScreenerTools } from "./screenerTools.js";
 import { registerX402Tools } from "./x402Tools.js";
@@ -43,7 +44,11 @@ export const createServer = (surface: ToolSurface = "stdio"): McpServer => {
 			{ capabilities: { tools: {} } }
 		);
 		registerTools(pub, "public");
+		// Gated (default off). Registered directly, so the public D-1 swap
+		// never touches it: its disclaimer is F-1 (AXIOM §4).
+		registerScorecardTool(pub);
 		envelopeSdkToolErrors(pub);
+		envelopeScorecardSdkErrors(pub);
 		return pub;
 	}
 	const server = new McpServer(
@@ -63,6 +68,11 @@ export const createServer = (surface: ToolSurface = "stdio"): McpServer => {
 	);
 
 	registerTools(server, surface);
+	// The scorecard: stdio only here (never the keyed HTTP surface). Gated.
+	if (surface === "stdio") {
+		registerScorecardTool(server);
+		envelopeScorecardSdkErrors(server);
+	}
 	/*
 	 * Registered separately from `registerTools` to keep the screener in its
 	 * own module. Both calls hit the same `McpServer`, so the

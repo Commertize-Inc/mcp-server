@@ -136,6 +136,7 @@ section("protocol-visible metadata behind every gate");
 		COMMERTIZE_MCP_DISABLE_DISCLOSURE: "",
 		COMMERTIZE_MCP_ENABLE_INQUIRY: "1",
 		COMMERTIZE_MCP_DISABLE_INQUIRY: "",
+		COMMERTIZE_MCP_ENABLE_SCORECARD: "1",
 	});
 	const { tools } = await client.listTools();
 	// Positive control: if a gate silently stopped opening, this sweep would

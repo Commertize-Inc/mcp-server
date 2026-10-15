@@ -39,7 +39,8 @@ import { SCREENER_TOOL_NAMES } from "./screenerTools.js";
 import { X402_TOOL_NAMES } from "./x402Tools.js";
 import { HTTP_TOOL_ALLOWLIST } from "./httpAllowlist.js";
 import { INQUIRY_TOOL_NAME } from "./inquiryTool.js";
-import { PUBLIC_TOOL_SET, withPublicDisclaimer } from "./publicSurface.js";
+import { isPublicTool, PUBLIC_TOOL_SET, withPublicDisclaimer } from "./publicSurface.js";
+import { SCORECARD_TOOL_NAME } from "./scorecardTool.js";
 import {
 	DISCLAIMER_BLOCK_TOOLS,
 	disclaimerBlockSchema,
@@ -594,7 +595,7 @@ export const registerTools = (
 				surface === "http"
 					? names.filter((n) => HTTP_TOOL_ALLOWLIST.has(n))
 					: surface === "public"
-						? names.filter((n) => PUBLIC_TOOL_SET.has(n))
+						? names.filter((n) => isPublicTool(n))
 						: [...names];
 			const writeTools = onSurface([
 				// `request_memo` reaches a person, but its upstream route is not
@@ -652,6 +653,9 @@ export const registerTools = (
 					// `registerSandboxTools` returns on. One predicate, two readers.
 					...(config.sandboxDisabled ? [] : SANDBOX_TOOL_NAMES),
 					...(config.x402Disabled ? [] : X402_TOOL_NAMES),
+					// Registered on stdio and public only (never the keyed /mcp,
+					// which is not in httpAllowlist.ts), on the same gate.
+					...(config.scorecardDisabled || surface === "http" ? [] : [SCORECARD_TOOL_NAME]),
 				]),
 			};
 			const file = path.join(CONTENT_DIR, "platform-info.md");

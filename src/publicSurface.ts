@@ -25,13 +25,20 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { config } from "./config.js";
 import { DISCLAIMER, DISCLAIMER_ID } from "./disclaimer.js";
 import { withDisclaimerBlock } from "./disclaimerBlock.js";
+import { SCORECARD_TOOL_NAME } from "./scorecardTool.js";
 
 export const PUBLIC_TOOL_NAMES = ["get_news", "get_article", "platform_info"] as const;
 
 export const PUBLIC_TOOL_SET: ReadonlySet<string> = new Set<string>(PUBLIC_TOOL_NAMES);
 
+/**
+ * The three reads, plus `tokenizability_check` ONLY while its gate is open
+ * (AXIOM 2026-10-15 §4 / DIR-1: a public surface never lists a refusing
+ * tool). The pre-dispatch 403 and the platform_info manifest both read this.
+ */
 export const isPublicTool = (name: unknown): name is string =>
-	typeof name === "string" && PUBLIC_TOOL_SET.has(name);
+	typeof name === "string" &&
+	(PUBLIC_TOOL_SET.has(name) || (name === SCORECARD_TOOL_NAME && !config.scorecardDisabled));
 
 /** D-1, the same constant as the server-wide DISCLAIMER (AXIOM §3). */
 export const PUBLIC_DISCLAIMER = DISCLAIMER;

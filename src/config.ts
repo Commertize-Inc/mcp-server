@@ -241,6 +241,18 @@ export const config = {
 		process.env.COMMERTIZE_MCP_ENABLE_PUBLIC !== "1",
 
 	/**
+	 * Gate for `tokenizability_check` (scorecardTool.ts). Default CLOSED:
+	 * registered on stdio and on `/mcp/public` only when this is exactly "1"
+	 * and the kill switch is not set. AXIOM 2026-10-15 §4 (T1-S8, DIR-1): the
+	 * public surface never lists a refusing tool, so this opens only once the
+	 * backend's SCORECARD_CHECK_ENABLED is on in production. Never on the
+	 * keyed `/mcp` (not in httpAllowlist.ts).
+	 */
+	scorecardDisabled:
+		process.env.COMMERTIZE_MCP_DISABLE_SCORECARD === "1" ||
+		process.env.COMMERTIZE_MCP_ENABLE_SCORECARD !== "1",
+
+	/**
 	 * Per-client-IP ceiling on JSON-RPC requests to `/mcp/public` (fixed
 	 * one-minute window, in memory, per process). The upstream news route's
 	 * own per-IP limit (120/min) is the floor behind it, and the 60 s response

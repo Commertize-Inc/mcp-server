@@ -96,6 +96,40 @@ for (const rel of [
 	scan(rel, text);
 }
 
+section("no server instructions string (AXIOM ruling 2026-10-15 F-B / R3-h)");
+{
+	/*
+	 * The old string told every client the server "exposes PUBLIC, READ-ONLY
+	 * marketplace data: offerings and their public terms, platform statistics",
+	 * which is false (the offerings gate is closed; no stats tool exists). AXIOM
+	 * ruled deletion, nothing in its place. Checked as the protocol reports it,
+	 * on stdio (gates closed and all open) and on the keyed HTTP server.
+	 */
+	const plain = await connect();
+	check("stdio, default gates: initialize carries no instructions", plain.getInstructions() === undefined, String(plain.getInstructions()).slice(0, 80));
+	await plain.close();
+	const open = await connect({
+		COMMERTIZE_MCP_ENABLE_OFFERINGS: "1",
+		COMMERTIZE_MCP_ENABLE_SANDBOX: "1",
+		COMMERTIZE_MCP_ENABLE_X402: "1",
+		COMMERTIZE_MCP_ENABLE_MEMO: "1",
+		COMMERTIZE_MCP_ENABLE_DISCLOSURE: "1",
+		COMMERTIZE_MCP_ENABLE_INQUIRY: "1",
+	});
+	check("stdio, every gate open: initialize carries no instructions", open.getInstructions() === undefined);
+	await open.close();
+	const { createServer } = await import(path.join(ROOT, "dist", "index.js"));
+	const { Client } = await import("@modelcontextprotocol/sdk/client/index.js");
+	const { InMemoryTransport } = await import("@modelcontextprotocol/sdk/inMemory.js");
+	const s = createServer("http");
+	const [a, b] = InMemoryTransport.createLinkedPair();
+	await s.connect(a);
+	const c = new Client({ name: "language-check", version: "0" });
+	await c.connect(b);
+	check("keyed http server: initialize carries no instructions", c.getInstructions() === undefined);
+	await c.close();
+}
+
 section("protocol-visible metadata");
 {
 	const client = await connect();

@@ -503,13 +503,13 @@ export const registerScorecardTool = (server: McpServer): void => {
 				return scorecardRefusal("UPSTREAM_UNAVAILABLE", null, true);
 			}
 
-			// Fail closed: the version, every id, and F-1 last must all hold.
+			// Fail closed: the version, every id, and F-1 exactly once and last
+			// (the first F-1 is the last element: covers missing, early, twice).
 			if (
 				rubric !== SCORECARD_VERSION ||
 				!Array.isArray(ids) ||
 				ids.length < 2 ||
 				!ids.every((id) => typeof id === "string" && RESULT_LIBRARY.has(id)) ||
-				ids[ids.length - 1] !== F1_ID ||
 				ids.indexOf(F1_ID) !== ids.length - 1
 			) {
 				return scorecardRefusal("INTERNAL_ERROR", null, false);

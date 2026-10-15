@@ -39,6 +39,7 @@ import { SCREENER_TOOL_NAMES } from "./screenerTools.js";
 import { X402_TOOL_NAMES } from "./x402Tools.js";
 import { HTTP_TOOL_ALLOWLIST } from "./httpAllowlist.js";
 import { INQUIRY_TOOL_NAME } from "./inquiryTool.js";
+import { PUBLIC_TOOL_SET, withPublicDisclaimer } from "./publicSurface.js";
 import {
 	FIREWALL_NOTE,
 	FIREWALL_SOURCE_PATH,
@@ -60,7 +61,7 @@ const CONTENT_DIR =
  * `platform_info` must describe THAT surface — a manifest that names a tool
  * the transport refuses is the same lie as one naming an unregistered tool.
  */
-export type ToolSurface = "stdio" | "http";
+export type ToolSurface = "stdio" | "http" | "public";
 
 /* ------------------------------------------------------------------ */
 /* response helpers                                                    */
@@ -167,10 +168,30 @@ export const registerTools = (
 	server: McpServer,
 	surface: ToolSurface = "stdio"
 ): void => {
+	/*
+	 * Every registration below goes through `register`. On the stdio and
+	 * keyed-HTTP surfaces it IS `server.registerTool`. On the public surface
+	 * it registers only `PUBLIC_TOOL_SET` names (anything else is never
+	 * registered, so `tools/list` cannot advertise it) and swaps the envelope's
+	 * disclaimer for the certified public one on every result, error included.
+	 */
+	const register = ((name: string, cfg: unknown, cb: (...a: unknown[]) => unknown) => {
+		if (surface !== "public") {
+			return (server.registerTool as (...a: unknown[]) => unknown).call(server, name, cfg, cb);
+		}
+		if (!PUBLIC_TOOL_SET.has(name)) return undefined;
+		return (server.registerTool as (...a: unknown[]) => unknown).call(
+			server,
+			name,
+			cfg,
+			async (...a: unknown[]) => withPublicDisclaimer((await cb(...a)) as CallToolResult)
+		);
+	}) as unknown as McpServer["registerTool"];
+
 	/* ---------------------------------------------------------- */
 	/* list_offerings                                              */
 	/* ---------------------------------------------------------- */
-	server.registerTool(
+	register(
 		"list_offerings",
 		{
 			title: "List Commertize marketplace offerings",
@@ -291,7 +312,7 @@ export const registerTools = (
 	/* ---------------------------------------------------------- */
 	/* get_offering                                                */
 	/* ---------------------------------------------------------- */
-	server.registerTool(
+	register(
 		"get_offering",
 		{
 			title: "Get one Commertize offering",
@@ -381,7 +402,7 @@ export const registerTools = (
 	/* ---------------------------------------------------------- */
 	/* get_news                                                    */
 	/* ---------------------------------------------------------- */
-	server.registerTool(
+	register(
 		"get_news",
 		{
 			title: "Get Commertize news and market commentary",
@@ -447,7 +468,7 @@ export const registerTools = (
 	/* ---------------------------------------------------------- */
 	/* get_article                                                 */
 	/* ---------------------------------------------------------- */
-	server.registerTool(
+	register(
 		"get_article",
 		{
 			title: "Get one Commertize article",
@@ -518,7 +539,7 @@ export const registerTools = (
 	/* ---------------------------------------------------------- */
 	/* platform_info                                               */
 	/* ---------------------------------------------------------- */
-	server.registerTool(
+	register(
 		"platform_info",
 		{
 			title: "About Commertize",
@@ -557,7 +578,9 @@ export const registerTools = (
 			const onSurface = (names: readonly string[]): string[] =>
 				surface === "http"
 					? names.filter((n) => HTTP_TOOL_ALLOWLIST.has(n))
-					: [...names];
+					: surface === "public"
+						? names.filter((n) => PUBLIC_TOOL_SET.has(n))
+						: [...names];
 			const writeTools = onSurface([
 				// `request_memo` reaches a person, but its upstream route is not
 				// mounted in production (probed 2026-09-10) — so it is registered,

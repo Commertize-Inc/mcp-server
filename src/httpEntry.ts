@@ -10,6 +10,7 @@ import { config } from "./config.js";
 import { KeyVerifier } from "./httpAuth.js";
 import { FixedWindowLimiter } from "./httpRateLimit.js";
 import { createHttpHandler, type HttpLogEvent, type NodeHandler } from "./httpServer.js";
+import { createPublicHttpHandler } from "./httpPublic.js";
 import { createServer } from "./index.js";
 
 export const VERSION = "0.1.0";
@@ -40,3 +41,21 @@ export const buildHandler = (log: (e: HttpLogEvent) => void = logToStderr): Node
 
 /** Module-level singleton: a warm serverless instance reuses its caches. */
 export const handler: NodeHandler = buildHandler();
+
+/**
+ * The no-login public endpoint (`POST /mcp/public`, httpPublic.ts). Its own
+ * handler and its own per-IP limiter; nothing above is shared except the log
+ * sink. Closed unless COMMERTIZE_MCP_ENABLE_PUBLIC=1 (config.ts).
+ */
+export const buildPublicHandler = (
+	log: (e: HttpLogEvent) => void = logToStderr
+): NodeHandler =>
+	createPublicHttpHandler({
+		enabled: () => !config.publicDisabled,
+		ipLimiter: new FixedWindowLimiter(config.publicRequestsPerIpPerMinute, 60_000),
+		createServer: () => createServer("public"),
+		log,
+		maxBodyBytes: config.httpMaxBodyBytes,
+	});
+
+export const publicHandler: NodeHandler = buildPublicHandler();

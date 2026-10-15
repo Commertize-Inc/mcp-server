@@ -30,6 +30,20 @@ import {
  *   refuses them by name on top, so a slip here is still a 403.
  */
 export const createServer = (surface: ToolSurface = "stdio"): McpServer => {
+	/*
+	 * The no-login public surface (`/mcp/public`, publicSurface.ts): the three
+	 * reads that return data today and nothing else. No `instructions` string:
+	 * the server-wide one describes offering data this surface never serves,
+	 * and new copy for it waits on certification.
+	 */
+	if (surface === "public") {
+		const pub = new McpServer(
+			{ name: "commertize", version: "0.1.0" },
+			{ capabilities: { tools: {} } }
+		);
+		registerTools(pub, "public");
+		return pub;
+	}
 	const server = new McpServer(
 		{ name: "commertize", version: "0.1.0" },
 		{

@@ -40,6 +40,7 @@ const SUITES = [
 	["streamable http e2e (stub upstream)", "http-e2e.mjs", { live: false }],
 	["client ip /64 bucketing (offline)", "client-ip.mjs", { live: false }],
 	["language", "language-check.mjs", { live: false }],
+	["readme directory profile (offline)", "readme-profile.mjs", { live: false }],
 ];
 
 const run = (file) =>

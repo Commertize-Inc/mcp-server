@@ -77,6 +77,26 @@ section("README carries no dated route-verification claim and no single-class le
 	check("no 'real estate' in README", !/real[- ]estate/i.test(README));
 }
 
+// AXIOM RULING agent-adoption MCP contracts 2026-10-15, R3-a..R3-d + pin.
+// The README names no parked surface (inquiries), no gated product area
+// (x402, sandbox, screener), no link to the uncertified agent skill, and no
+// key a reader cannot obtain. Each check is a whole-file count, case-blind.
+section("AXIOM R3: no parked or gated surface, no key, no extra links");
+{
+	for (const word of ["inquir", "x402", "sandbox", "screener", "agent-skill", "Bearer"]) {
+		const count = README.toLowerCase().split(word.toLowerCase()).length - 1;
+		check(`'${word}' appears 0 times`, count === 0, String(count));
+	}
+	check("no 'anonymous mode' sentence (R3-a; false once /mcp/public exists)", !/anonymous mode/i.test(README));
+	check("no Public API link line (R3-c)", !lines.some((l) => l.startsWith("- Public API:")));
+	const testsText =
+		"Runs the offline suites. The live-network suite is opt-in: `COMMERTIZE_MCP_LIVE_TESTS=1 npm test`, or\n`npm run test:live` on its own.";
+	check("tests paragraph is apx-26d3e728af (R3-d)", apx(testsText) === "apx-26d3e728af" && README.includes(`\n${testsText}\n`));
+	check("closing line is apx-c570061e40 (R3-e)", lines.some((l) => apx(l) === "apx-c570061e40"));
+	check("License line is apx-9706e81edd", lines.some((l) => apx(l) === "apx-9706e81edd"));
+	check("Privacy link is apx-e6bdd33092", lines.some((l) => apx(l) === "apx-e6bdd33092"));
+}
+
 section("glama.json");
 {
 	const g = JSON.parse(await readFile(path.join(ROOT, "glama.json"), "utf8"));

@@ -11,6 +11,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 
 import { config } from "./config.js";
 import { registerInquiryTool } from "./inquiryTool.js";
+import { envelopeSdkToolErrors } from "./publicSurface.js";
 import { registerSandboxTools } from "./sandboxTools.js";
 import { registerScreenerTools } from "./screenerTools.js";
 import { registerX402Tools } from "./x402Tools.js";
@@ -42,6 +43,7 @@ export const createServer = (surface: ToolSurface = "stdio"): McpServer => {
 			{ capabilities: { tools: {} } }
 		);
 		registerTools(pub, "public");
+		envelopeSdkToolErrors(pub);
 		return pub;
 	}
 	const server = new McpServer(

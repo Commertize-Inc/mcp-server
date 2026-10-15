@@ -19,6 +19,22 @@
 
 import type { HttpLogEvent } from "./httpServer.js";
 
+/**
+ * T5-S1, the user-facing disclosure, AXIOM-certified apx-00aee28eb6 (ruling
+ * 2026-10-15 §8). It describes what `toCapture` sends, field for field. It
+ * goes into the README in the SAME change that sets COMMERTIZE_MCP_ANALYTICS=1
+ * in production, never before: a README stating that the hosted endpoint
+ * sends metrics while the flag is off would describe a feature we do not run.
+ * analytics-e2e pins this text by id and pins that every field it names is a
+ * key of the capture.
+ */
+export const ANALYTICS_DISCLOSURE =
+	"The hosted endpoint sends anonymous usage metrics for each tool call to our analytics " +
+	"provider: the tool name, the client application's name and version, the transport, the " +
+	"outcome, any error code, the HTTP status, the response time and the server version. These " +
+	"metrics do not include your key, your IP address, the arguments you send or the data returned.";
+export const ANALYTICS_DISCLOSURE_ID = "apx-00aee28eb6";
+
 export const ANALYTICS_EVENT = "mcp_tool_call";
 export const ANALYTICS_DISTINCT_ID = "commertize-mcp-server";
 
@@ -67,6 +83,43 @@ export const uaProductOf = (ua: unknown): { name: string; version: string | null
 	return { name, version: version && VERSION.test(version) ? version : null };
 };
 
+/**
+ * The ONLY client names that can leave for PostHog (AEGIS PR #5 F5-1).
+ *
+ * A User-Agent token or `clientInfo.name` is caller-chosen text: dots and
+ * hyphens let a hostname, an org name or an email-equivalent through any
+ * character-class sanitiser (PoC: "jane.doe.acme-corp.com"). The destination
+ * is outside our trust boundary, so the client is reported as one of these
+ * families, matched case-blind on the whole token or a "<family>-" prefix,
+ * else "other". Adding a family is a reviewed change to this list.
+ */
+export const CLIENT_FAMILIES = [
+	"claude-ai",
+	"claude-code",
+	"cursor",
+	"vscode",
+	"windsurf",
+	"openai-mcp",
+	"chatgpt",
+	"mcp-inspector",
+	"python-httpx",
+	"node",
+	"curl",
+] as const;
+
+export const clientFamilyOf = (raw: unknown): string => {
+	if (typeof raw !== "string" || raw === "" || raw === "unknown") return "unknown";
+	const t = raw.toLowerCase();
+	return CLIENT_FAMILIES.find((f) => t === f || t.startsWith(`${f}-`)) ?? "other";
+};
+
+/** Numeric dotted version (at most four parts) for a known family; else null. */
+const NUMERIC_VERSION = /^\d{1,6}(?:\.\d{1,6}){0,3}$/;
+export const clientVersionFor = (family: string, raw: unknown): string | null =>
+	family !== "other" && family !== "unknown" && typeof raw === "string" && NUMERIC_VERSION.test(raw)
+		? raw
+		: null;
+
 /** Map one public log event to a capture body, or null if it is not a tool call. */
 export const toCapture = (
 	e: HttpLogEvent,
@@ -76,6 +129,7 @@ export const toCapture = (
 	if (typeof e.tool !== "string" || e.tool === "") return null;
 	const str = (v: unknown) => (typeof v === "string" ? v : null);
 	const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+	const family = clientFamilyOf(e.client_name);
 	return {
 		api_key: cfg.apiKey,
 		event: ANALYTICS_EVENT,
@@ -88,8 +142,8 @@ export const toCapture = (
 			error_code: str(e.error_code),
 			http_status: num(e.status),
 			latency_ms: num(e.ms),
-			client_name: str(e.client_name) ?? "unknown",
-			client_version: str(e.client_version),
+			client_name: family,
+			client_version: clientVersionFor(family, e.client_version),
 			server_version: cfg.serverVersion,
 			$process_person_profile: false,
 			$geoip_disable: true,

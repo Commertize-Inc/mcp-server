@@ -104,6 +104,57 @@ section("2-3. allowlisted, anonymous capture");
 	check("uaProductOf: junk -> unknown", ["<x>/1", "", null, "a b/1".replace(" ", "\u0000")].every((u) => uaProductOf(u).name === "unknown"));
 }
 
+section("2a. T5-S1 disclosure (AXIOM apx-00aee28eb6) matches what is sent");
+{
+	const { ANALYTICS_DISCLOSURE, ANALYTICS_DISCLOSURE_ID } = await import(path.join(DIST, "analytics.js"));
+	const { createHash } = await import("node:crypto");
+	const id = "apx-" + createHash("sha1").update(ANALYTICS_DISCLOSURE, "utf8").digest("hex").slice(0, 10);
+	check("disclosure hashes to apx-00aee28eb6", id === "apx-00aee28eb6" && ANALYTICS_DISCLOSURE_ID === id, id);
+	// Each named field, mapped to the capture key that carries it. A field the
+	// text names but the capture lacks, or a capture key the text omits, fails.
+	const NAMED = {
+		"the tool name": "tool",
+		"the client application's name and version": ["client_name", "client_version"],
+		"the transport": "transport",
+		"the outcome": "outcome",
+		"any error code": "error_code",
+		"the HTTP status": "http_status",
+		"the response time": "latency_ms",
+		"the server version": "server_version",
+	};
+	const c = toCapture({ ts: "t", event: "public_request", tool: "get_news", status: 200, outcome: "ok", error_code: null, ms: 1, client_name: "node", client_version: "1" }, { apiKey: KEY, serverVersion: "0.1.0" });
+	const covered = new Set(Object.values(NAMED).flat());
+	check("every field the disclosure names is in the text", Object.keys(NAMED).every((p) => ANALYTICS_DISCLOSURE.includes(p)));
+	check("every named field is a capture key", [...covered].every((k) => k in c.properties));
+	const nonPrivate = Object.keys(c.properties).filter((k) => !k.startsWith("$"));
+	check("every non-$ capture key is named by the disclosure", nonPrivate.every((k) => covered.has(k)), nonPrivate.filter((k) => !covered.has(k)).join(","));
+	const readme = await readFile(path.join(HERE, "..", "README.md"), "utf8");
+	check("not in the README while the flag is off by default (ships with the flag)", !readme.includes(ANALYTICS_DISCLOSURE));
+}
+
+section("2b. AEGIS F5-1: client name and version leave only as a closed set");
+{
+	const base = { ts: "t", event: "public_request", tool: "get_news", status: 200, outcome: "ok", error_code: null, ms: 1 };
+	const cap = (name, version) => toCapture({ ...base, client_name: name, client_version: version }, { apiKey: KEY, serverVersion: "0.1.0" }).properties;
+	// Pinned here as literals, never read back from the module.
+	const FAMILIES = ["claude-ai", "claude-code", "cursor", "vscode", "windsurf", "openai-mcp", "chatgpt", "mcp-inspector", "python-httpx", "node", "curl"];
+	const ident = cap("jane.doe.acme-corp.com", "1.0");
+	check("AEGIS PoC: a hostname-shaped token becomes 'other'", ident.client_name === "other", ident.client_name);
+	check("…and its version is dropped", ident.client_version === null, String(ident.client_version));
+	for (const t of ["acme-corp", "jane.doe", "my-org-agent", "Bearer", "x".repeat(40)]) {
+		check(`'${t.slice(0, 20)}' -> other`, cap(t, "1.0").client_name === "other");
+	}
+	check("every known family passes through as itself", FAMILIES.every((f) => cap(f, "1.2.3").client_name === f));
+	check("case-blind: 'Claude-Code' -> claude-code", cap("Claude-Code", "1.2.3").client_name === "claude-code");
+	check("a family prefix keeps only the family: 'cursor-vscode' -> cursor", cap("cursor-vscode", "1.0").client_name === "cursor");
+	check("a family name embedded later is not a match: 'acme-cursor' -> other", cap("acme-cursor", "1.0").client_name === "other");
+	check("unknown stays unknown", cap("unknown", null).client_name === "unknown" && cap(null, null).client_name === "unknown");
+	check("known family keeps a numeric version", cap("claude-code", "2.0.14").client_version === "2.0.14");
+	for (const v of ["1.2.3-beta", "1.2.3+jane", "v1", "1.2.3.4.5", "abc"]) {
+		check(`version '${v}' is dropped`, cap("claude-code", v).client_version === null);
+	}
+}
+
 section("4. best effort: never throws, bounded by a timeout");
 {
 	const cfg = { ...analyticsConfigFrom(ON, "t"), timeoutMs: 80 };
@@ -181,6 +232,18 @@ section("5. end to end through the public handler");
 	check("latency is a number", [a, b, c].every((p) => typeof p.latency_ms === "number"));
 	const blob = JSON.stringify(captured);
 	check("no IP or slug in any capture", !blob.includes("198.51.100.77") && !blob.includes("missing"));
+
+	// AEGIS F5-1 PoC, end to end: the identifying User-Agent never leaves.
+	const before = captured.length;
+	await fetch(URLP, {
+		method: "POST",
+		headers: { "content-type": "application/json", accept: "application/json, text/event-stream", "user-agent": "jane.doe.acme-corp.com/1.0 (Macintosh; jane@acme.com)", "x-vercel-forwarded-for": "198.51.100.78" },
+		body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "get_news", arguments: {} } }),
+	}).then((r) => r.text());
+	await new Promise((r) => setTimeout(r, 50));
+	const leak = captured.slice(before);
+	check("identifying UA: one capture, client_name 'other', version null", leak.length === 1 && leak[0].properties.client_name === "other" && leak[0].properties.client_version === null, JSON.stringify(leak.map((x) => x.properties)));
+	check("identifying UA: no 'jane' or 'acme' anywhere in the body", !/jane|acme/i.test(JSON.stringify(leak)));
 
 	const broken = createPublicHttpHandler({
 		enabled: () => true,

@@ -13,16 +13,23 @@
  *   3. NOTHING ELSE CAN BE CALLED. Every offering/sponsor/inquiry/memo/
  *      disclosure/screener name, an unknown name, and a batch hiding one, is
  *      HTTP 403 before dispatch.
- *   4. EVERY RESPONSE CARRIES THE CERTIFIED DISCLAIMER (apx-92c1f4514d),
- *      success and error, in structuredContent and in the text content.
+ *   4. EVERY RESPONSE CARRIES THE CERTIFIED DISCLAIMER D-1 (apx-b88a8f669d,
+ *      AXIOM ruling 2026-10-15 §3) and the machine-readable disclaimer_block
+ *      (§7), success and error, in structuredContent and in the text content.
+ *      The directory-only text apx-92c1f4514d never appears on a response.
  *   5. THE PER-IP CEILING BITES, per IP, with Retry-After.
  *   6. NO CREDENTIAL IS NEEDED, ONE SENT IS IGNORED, AND THE LOG CARRIES NO
  *      IP, HEADER OR BODY.
  *   7. THE OTHER SURFACES ARE UNCHANGED (stdio and keyed-HTTP tool lists).
+ *   8. AXIOM 2026-10-15 §2 / §7 / F-C: platform_info serves the certified file
+ *      byte for byte, its description and the get_article slug example are the
+ *      certified strings, capabilities are derived per surface, and no
+ *      offering tool carries a disclaimer_block (§7 hard limit).
  */
 
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { createServer as createNodeServer } from "node:http";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -32,6 +39,30 @@ import { check, DISCLAIMER, resetCounters, section, summary } from "./harness.mj
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const DIST = path.resolve(HERE, "..", "dist");
 const apx = (s) => "apx-" + createHash("sha1").update(s, "utf8").digest("hex").slice(0, 10);
+const sha256 = (s) => createHash("sha256").update(s, "utf8").digest("hex");
+
+/*
+ * AXIOM ruling 2026-10-15, pinned HERE as literals (never read back from the
+ * module under test, so a drift in src/ cannot drag the test along with it).
+ */
+const D1_ID = "apx-b88a8f669d";
+const DIRECTORY_ONLY_TEXT_ID = "apx-92c1f4514d";
+const DIRECTORY_ONLY_PREFIX = "This listing is reference information.";
+const PLATFORM_INFO_SHA256 = "04e8a830f29f007c9adc4c11ded0688adf657e78e60d6ee28da28e00f5d966f3";
+const PLATFORM_INFO_DESC_ID = "apx-2abec23e99";
+const SLUG_DESC_ID = "apx-5d1096af2d";
+const EXPECTED_BLOCK = {
+	schema: "commertize.disclaimer/1",
+	text_id: D1_ID,
+	informational_only: true,
+	is_offer: false,
+	is_solicitation: false,
+	is_recommendation: false,
+	is_advice: false,
+	confers_authority_to_transact: false,
+};
+/** Key order is part of the pin: the text content is JSON a model reads. */
+const sameBlock = (b) => JSON.stringify(b) === JSON.stringify(EXPECTED_BLOCK);
 
 const ARTICLES = [
 	{
@@ -187,6 +218,8 @@ section("2. exactly three tools");
 	const caps = info.body?.result?.structuredContent?.capabilities;
 	check("platform_info.capabilities.tools = the public three", JSON.stringify([...(caps?.tools ?? [])].sort()) === JSON.stringify(EXPECTED_PUBLIC), JSON.stringify(caps?.tools));
 	check("platform_info: no write tools, read_only", caps?.write_tools?.length === 0 && caps?.read_only === true);
+	check("platform_info (public): requires_authentication false (no key on this surface)", caps?.requires_authentication === false, JSON.stringify(caps));
+	check("platform_info (public): can_transact false (no paying tool on this surface)", caps?.can_transact === false);
 }
 
 /* ------------------------------------------------------------------ */
@@ -216,7 +249,8 @@ section("3. nothing else can be called (403 before dispatch)");
 /* ------------------------------------------------------------------ */
 section("4. every response carries the certified disclaimer");
 {
-	check("PUBLIC_DISCLAIMER hashes to its id", apx(PUBLIC_DISCLAIMER) === PUBLIC_DISCLAIMER_ID && PUBLIC_DISCLAIMER_ID === "apx-92c1f4514d");
+	check("PUBLIC_DISCLAIMER is D-1 (hash and id)", apx(PUBLIC_DISCLAIMER) === D1_ID && PUBLIC_DISCLAIMER_ID === D1_ID, PUBLIC_DISCLAIMER_ID);
+	check("server-wide DISCLAIMER is D-1 too (AXIOM §3: both surfaces)", apx(DISCLAIMER) === D1_ID);
 	const cases = [
 		["get_news", {}, false],
 		["get_article", { slug: "tokenization-week" }, false],
@@ -236,8 +270,13 @@ section("4. every response carries the certified disclaimer");
 		check(`${name}${expectError ? " (error path)" : ""}: structured disclaimer is the certified text`, s?.disclaimer === PUBLIC_DISCLAIMER);
 		check(`${name}${expectError ? " (error path)" : ""}: text content agrees with structuredContent`, parsedText && JSON.stringify(parsedText) === JSON.stringify(s));
 		check(`${name}${expectError ? " (error path)" : ""}: as_of and source_url present`, typeof s?.as_of === "string" && typeof s?.source_url === "string");
-		check(`${name}${expectError ? " (error path)" : ""}: the server-wide disclaimer is absent`, !text.includes(DISCLAIMER));
+		check(`${name}${expectError ? " (error path)" : ""}: the directory-only text (${DIRECTORY_ONLY_TEXT_ID}) is absent`, !text.includes(DIRECTORY_ONLY_PREFIX));
+		check(`${name}${expectError ? " (error path)" : ""}: disclaimer_block is the certified block (text_id D-1)`, sameBlock(s?.disclaimer_block), JSON.stringify(s?.disclaimer_block));
+		check(`${name}${expectError ? " (error path)" : ""}: disclaimer_block.text_id names the disclaimer actually served`, apx(s?.disclaimer ?? "") === s?.disclaimer_block?.text_id);
 	}
+	const list = await rpc(LIST);
+	const listText = JSON.stringify(list.body);
+	check("tools/list carries neither the directory-only text nor a bare 'listing' disclaimer", !listText.includes(DIRECTORY_ONLY_PREFIX));
 }
 
 /* ------------------------------------------------------------------ */
@@ -310,6 +349,63 @@ section("7. other surfaces unchanged");
 	check("keyed http still registers its allowlist (incl. list_offerings, file_sponsor_inquiry)", http.includes("list_offerings") && http.includes("file_sponsor_inquiry"), http.join(","));
 	const pub = await names("public");
 	check("public registers only the three", JSON.stringify(pub) === JSON.stringify(EXPECTED_PUBLIC), pub.join(","));
+}
+
+/* ------------------------------------------------------------------ */
+section("8. AXIOM 2026-10-15: certified platform_info, strings, per-surface capabilities");
+{
+	const file = await readFile(path.resolve(HERE, "..", "content", "platform-info.md"), "utf8");
+	check("content/platform-info.md is the certified file (sha256 04e8a830...66f3)", sha256(file) === PLATFORM_INFO_SHA256, sha256(file));
+
+	ipLimiter.reset();
+	const info = (await rpc(CALL("platform_info"))).body?.result?.structuredContent;
+	check("platform_info serves the file byte for byte", info?.markdown === file);
+	check("platform_info source_url is /about (C2-2: ships with the file)", info?.source_url === "https://commertize.com/about", info?.source_url);
+
+	const tools = (await rpc(LIST)).body?.result?.tools ?? [];
+	const pi = tools.find((t) => t.name === "platform_info");
+	check("platform_info description is apx-2abec23e99", apx(pi?.description ?? "") === PLATFORM_INFO_DESC_ID, pi?.description);
+	const art = tools.find((t) => t.name === "get_article");
+	const slugDesc = art?.inputSchema?.properties?.slug?.description ?? "";
+	check("get_article slug example is apx-5d1096af2d", apx(slugDesc) === SLUG_DESC_ID, slugDesc);
+	check("no CRE-led slug example anywhere on the surface", !JSON.stringify(tools).includes("ai-in-cre-asset-management"));
+
+	// The keyed and stdio surfaces, in process, over the SDK's in-memory pair.
+	const { Client } = await import("@modelcontextprotocol/sdk/client/index.js");
+	const { InMemoryTransport } = await import("@modelcontextprotocol/sdk/inMemory.js");
+	const inProc = async (surface) => {
+		const s = createServer(surface);
+		const [a, b] = InMemoryTransport.createLinkedPair();
+		await s.connect(a);
+		const c = new Client({ name: "public-e2e", version: "0" });
+		await c.connect(b);
+		return c;
+	};
+	for (const [surface, wantAuth] of [
+		["http", true],
+		["stdio", false],
+	]) {
+		const c = await inProc(surface);
+		const r = await c.callTool({ name: "platform_info", arguments: {} });
+		const caps = r.structuredContent?.capabilities;
+		check(`${surface}: requires_authentication is ${wantAuth} (derived from the surface)`, caps?.requires_authentication === wantAuth, JSON.stringify(caps?.requires_authentication));
+		check(`${surface}: can_transact false while x402_fetch is not registered`, caps?.can_transact === false && !caps?.tools?.includes("x402_fetch"));
+		check(`${surface}: platform_info serves the certified file`, r.structuredContent?.markdown === file);
+		check(`${surface}: platform_info carries D-1 and its block`, apx(r.structuredContent?.disclaimer ?? "") === D1_ID && sameBlock(r.structuredContent?.disclaimer_block));
+		const n = await c.callTool({ name: "get_news", arguments: {} });
+		check(`${surface}: get_news carries the block`, sameBlock(n.structuredContent?.disclaimer_block));
+		// §7 hard limit: never on a tool that returns offering data.
+		for (const [name, args] of [
+			["list_offerings", {}],
+			["get_offering", { offering_id: "x" }],
+			["list_sponsors", {}],
+		]) {
+			const o = await c.callTool({ name, arguments: args });
+			const sc = o.structuredContent ?? {};
+			check(`${surface}: ${name} carries no disclaimer_block`, sc && typeof sc === "object" && !("disclaimer_block" in sc) && !JSON.stringify(o.content ?? []).includes("disclaimer_block"), Object.keys(sc).join(","));
+		}
+		await c.close();
+	}
 }
 
 server.close();

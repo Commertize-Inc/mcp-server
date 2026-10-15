@@ -213,4 +213,31 @@ section("the negated-form allowance is narrow");
 	);
 }
 
+/* ---------------------------------------------------------------- */
+section("standing disclaimer is AXIOM D-1 (ruling 2026-10-15 §3)");
+{
+	/*
+	 * The four load-bearing clauses, re-pinned to D-1 (apx-b88a8f669d), and
+	 * the two refused claims of the old text: that Commertize offers
+	 * securities under Regulation D (false, a legal-status claim), and that
+	 * every response is served as-is from the public API (false for
+	 * platform_info and computed results).
+	 */
+	const { DISCLAIMER } = await import(path.join(ROOT, "dist", "disclaimer.js"));
+	const { createHash } = await import("node:crypto");
+	const id = "apx-" + createHash("sha1").update(DISCLAIMER, "utf8").digest("hex").slice(0, 10);
+	check("DISCLAIMER hashes to apx-b88a8f669d", id === "apx-b88a8f669d", id);
+	for (const clause of [
+		"is an offer to sell or a solicitation of an offer to buy any security",
+		"investment, legal or tax advice or a recommendation",
+		"confers no authority to transact",
+		"may be incomplete or out of date",
+	]) {
+		check(`clause present: "${clause}"`, DISCLAIMER.includes(clause));
+	}
+	for (const refused of [/Regulation D/i, /verified investors/i, /as-is/i, /Securities are offered/i]) {
+		check(`refused claim absent: ${refused}`, !refused.test(DISCLAIMER));
+	}
+}
+
 process.exit(summary("language") === 0 ? 0 : 1);

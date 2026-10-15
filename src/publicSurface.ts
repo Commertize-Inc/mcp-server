@@ -12,11 +12,16 @@
  * forge-axiom-agent-adoption-mcp-contracts-2026-10-15 §1). Adding a name here
  * is a reviewed change, like `httpAllowlist.ts`.
  *
- * Every response on this surface carries the certified directory disclaimer
- * below in place of the server-wide one (RUNE 2026-10-15, AXIOM set D).
+ * Every response on this surface carries D-1 (AXIOM ruling 2026-10-15 §3),
+ * enforced by `withPublicDisclaimer` on every result, error included. The
+ * directory text apx-92c1f4514d ("This listing is reference information…")
+ * is for directory listing fields and README line 5 only: on a tool response
+ * "listing" reads as an offering listing, so it never appears here.
  */
 
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+
+import { DISCLAIMER, DISCLAIMER_ID } from "./disclaimer.js";
 
 export const PUBLIC_TOOL_NAMES = ["get_news", "get_article", "platform_info"] as const;
 
@@ -25,10 +30,9 @@ export const PUBLIC_TOOL_SET: ReadonlySet<string> = new Set<string>(PUBLIC_TOOL_
 export const isPublicTool = (name: unknown): name is string =>
 	typeof name === "string" && PUBLIC_TOOL_SET.has(name);
 
-/** AXIOM-certified, byte-exact. Id = apx- + sha1(UTF-8 bytes)[:10]. */
-export const PUBLIC_DISCLAIMER =
-	"This listing is reference information. It is not an offer to sell or a solicitation of an offer to buy any security.";
-export const PUBLIC_DISCLAIMER_ID = "apx-92c1f4514d";
+/** D-1, the same constant as the server-wide DISCLAIMER (AXIOM §3). */
+export const PUBLIC_DISCLAIMER = DISCLAIMER;
+export const PUBLIC_DISCLAIMER_ID = DISCLAIMER_ID;
 
 /**
  * Replace the envelope's `disclaimer` with the public one, and re-render the

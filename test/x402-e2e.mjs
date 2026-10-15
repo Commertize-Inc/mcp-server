@@ -258,9 +258,12 @@ section("gate open: listed, advertised, and honest about what it does");
 		"platform_info names x402_fetch as a write tool",
 		info.capabilities.write_tools.includes("x402_fetch"),
 	);
+	// AXIOM ruling 2026-10-15 F-C / C2-1: `x402_fetch` spends the caller's own
+	// funds, so a surface that registers it CAN transact. Derived, not asserted
+	// (this pin said `false` until 2026-10-15; the hard-coded value was wrong).
 	check(
-		"platform_info still says this server cannot transact securities",
-		info.capabilities.can_transact === false,
+		"platform_info says this server can transact while x402_fetch is registered",
+		info.capabilities.can_transact === true,
 	);
 
 	/*

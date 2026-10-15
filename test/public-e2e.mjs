@@ -125,7 +125,24 @@ const rpc = async (body, headers) => {
 	return { status: r.status, headers: r.headers, body: await r.json().catch(() => null) };
 };
 
+/*
+ * Pinned HERE as a literal, never read back from PUBLIC_TOOL_NAMES: a test
+ * that compares the surface with the constant that defines it would pass if
+ * someone added an offering tool to the constant. Adding a public tool means
+ * editing this line too, in a reviewed diff (second opinion on PR #4).
+ */
+const EXPECTED_PUBLIC = ["get_article", "get_news", "platform_info"];
+/** Name families that must never be public, whatever the constant says. */
+const NEVER_PUBLIC = /offering|sponsor|listing|reserve|inquiry|memo|disclosure|sandbox|x402|invest|subscribe|wallet/i;
+
 resetCounters();
+
+section("0. the public set is pinned and holds no money-path family");
+{
+	check("PUBLIC_TOOL_NAMES equals the pinned literal", JSON.stringify([...PUBLIC_TOOL_NAMES].sort()) === JSON.stringify(EXPECTED_PUBLIC), PUBLIC_TOOL_NAMES.join(","));
+	check("no public name matches a never-public family", PUBLIC_TOOL_NAMES.every((n) => !NEVER_PUBLIC.test(n)));
+	check("deny pattern positive control", ["list_offerings", "get_sponsor", "file_sponsor_inquiry", "request_memo", "x402_fetch"].every((n) => NEVER_PUBLIC.test(n)));
+}
 
 /* ------------------------------------------------------------------ */
 section("1. gate parse (config.ts), default closed");
@@ -164,11 +181,11 @@ section("2. exactly three tools");
 	check("no instructions string on this surface", init.body?.result && init.body.result.instructions === undefined);
 	const list = await rpc(LIST);
 	const names = (list.body?.result?.tools ?? []).map((t) => t.name).sort();
-	check("tools/list = the public three", JSON.stringify(names) === JSON.stringify([...PUBLIC_TOOL_NAMES].sort()), names.join(","));
+	check("tools/list = the public three", JSON.stringify(names) === JSON.stringify(EXPECTED_PUBLIC), names.join(","));
 
 	const info = await rpc(CALL("platform_info"));
 	const caps = info.body?.result?.structuredContent?.capabilities;
-	check("platform_info.capabilities.tools = the public three", JSON.stringify([...(caps?.tools ?? [])].sort()) === JSON.stringify([...PUBLIC_TOOL_NAMES].sort()), JSON.stringify(caps?.tools));
+	check("platform_info.capabilities.tools = the public three", JSON.stringify([...(caps?.tools ?? [])].sort()) === JSON.stringify(EXPECTED_PUBLIC), JSON.stringify(caps?.tools));
 	check("platform_info: no write tools, read_only", caps?.write_tools?.length === 0 && caps?.read_only === true);
 }
 
@@ -292,7 +309,7 @@ section("7. other surfaces unchanged");
 	check("stdio still registers the offering tools", stdio.includes("list_offerings") && stdio.includes("get_offering"), stdio.join(","));
 	check("keyed http still registers its allowlist (incl. list_offerings, file_sponsor_inquiry)", http.includes("list_offerings") && http.includes("file_sponsor_inquiry"), http.join(","));
 	const pub = await names("public");
-	check("public registers only the three", JSON.stringify(pub) === JSON.stringify([...PUBLIC_TOOL_NAMES].sort()), pub.join(","));
+	check("public registers only the three", JSON.stringify(pub) === JSON.stringify(EXPECTED_PUBLIC), pub.join(","));
 }
 
 server.close();

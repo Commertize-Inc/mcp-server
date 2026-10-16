@@ -257,6 +257,33 @@ export class FeedReadError extends Error {
 	}
 }
 
+/** The built-in public endpoints (config.ts defaults). Safe to show verbatim. */
+export const PUBLIC_DEFAULT_RPC_URLS: ReadonlySet<string> = new Set([
+	"https://arb1.arbitrum.io/rpc",
+	"https://mainnet.base.org",
+]);
+
+/**
+ * What a tool result may say about the RPC it read from. Provider URLs often
+ * carry the API key in the path or query (Alchemy `/v2/<key>`, Infura
+ * `/v3/<id>`), and a result reaches the model context and transcripts. So an
+ * override shows only scheme and host; userinfo, path, query and fragment are
+ * dropped. The two public defaults are shown as they are.
+ */
+export const redactRpcUrl = (u: string): string => {
+	if (PUBLIC_DEFAULT_RPC_URLS.has(u)) return u;
+	try {
+		const p = new URL(u);
+		return `${p.protocol}//${p.host}/[redacted]`;
+	} catch {
+		return "[RPC URL redacted]";
+	}
+};
+
+/** Remove every copy of the configured URL from an error message. */
+const scrubUrl = (message: string, url: string): string =>
+	url ? message.split(url).join(redactRpcUrl(url)) : message;
+
 export interface RpcOptions {
 	url: string;
 	timeoutMs: number;
@@ -285,7 +312,7 @@ export const rpc = async (
 	} catch (err) {
 		throw new FeedReadError(
 			"RPC_UNREACHABLE",
-			`Could not reach the RPC endpoint: ${err instanceof Error ? err.message : String(err)}`
+			`Could not reach the RPC endpoint: ${scrubUrl(err instanceof Error ? err.message : String(err), opts.url)}`
 		);
 	} finally {
 		clearTimeout(timer);
@@ -298,7 +325,7 @@ export const rpc = async (
 		throw new FeedReadError("BAD_RESPONSE", "RPC answered with a body that is not JSON.");
 	}
 	if (body.error) {
-		throw new FeedReadError("RPC_ERROR", `RPC error: ${body.error.message ?? "unknown"}`);
+		throw new FeedReadError("RPC_ERROR", `RPC error: ${scrubUrl(body.error.message ?? "unknown", opts.url)}`);
 	}
 	if (body.result === undefined) {
 		throw new FeedReadError("BAD_RESPONSE", "RPC answered with no result.");

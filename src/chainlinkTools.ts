@@ -24,6 +24,7 @@ import {
 	FeedReadError,
 	findFeed,
 	readChain,
+	redactRpcUrl,
 } from "./chainlinkFeeds.js";
 import { config } from "./config.js";
 import { refuse, toResult } from "./envelope.js";
@@ -117,7 +118,7 @@ const run = async (chain: ChainKey, feeds: FeedKey[] | "all") => {
 			...snap,
 			feed_note: CHAINLINK_STRINGS.feedNote,
 			as_of: new Date().toISOString(),
-			source_url: opts.url,
+			source_url: redactRpcUrl(opts.url),
 			cache: NO_FETCH_CACHE,
 			disclaimer: DISCLAIMER,
 			error: null,
@@ -128,7 +129,7 @@ const run = async (chain: ChainKey, feeds: FeedKey[] | "all") => {
 			{
 				...empty,
 				as_of: new Date().toISOString(),
-				source_url: opts.url,
+				source_url: redactRpcUrl(opts.url),
 				cache: NO_FETCH_CACHE,
 				disclaimer: DISCLAIMER,
 				error: {

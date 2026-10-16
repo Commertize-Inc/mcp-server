@@ -255,6 +255,42 @@ section("e2e: Base");
 	await c.close();
 }
 
+section("e2e: an override RPC URL never reaches a tool result (AEGIS L9-1)");
+{
+	const keyed = `http://127.0.0.1:${PORT}/ok/v2/SECRET-PATH-KEY?apikey=SECRET-QUERY-KEY#SECRET-FRAG`;
+	const ok = await once(
+		{ COMMERTIZE_MCP_ENABLE_CHAINLINK_FEEDS: "1", COMMERTIZE_MCP_ARBITRUM_RPC_URL: keyed },
+		"get_chainlink_feed",
+		{ chain: "arbitrum-one", feed: "usdc-usd" }
+	);
+	check("keyed override still reads (control: the stub answered)", !ok.result.isError && ok.payload.feeds.length === 1);
+	check("success: source_url is scheme + host only", ok.payload.source_url === `http://127.0.0.1:${PORT}/[redacted]`, ok.payload.source_url);
+	check("success: no secret anywhere in the result", !JSON.stringify(ok.payload).includes("SECRET"));
+
+	const err = await once(
+		{ COMMERTIZE_MCP_ENABLE_CHAINLINK_FEEDS: "1", COMMERTIZE_MCP_ARBITRUM_RPC_URL: `http://127.0.0.1:1/v3/SECRET-PATH-KEY` },
+		"get_chainlink_feed_health",
+		{ chain: "arbitrum-one" }
+	);
+	check("error: unreachable is still reported", err.payload.error?.code === "RPC_UNREACHABLE");
+	check("error: no secret in source_url or message", !JSON.stringify(err.payload).includes("SECRET"), JSON.stringify(err.payload.error));
+
+	// fetch refuses a URL with credentials and quotes the URL in its error.
+	const cred = await once(
+		{ COMMERTIZE_MCP_ENABLE_CHAINLINK_FEEDS: "1", COMMERTIZE_MCP_ARBITRUM_RPC_URL: `http://user:SECRET-PW@127.0.0.1:${PORT}/ok` },
+		"get_chainlink_feed_health",
+		{ chain: "arbitrum-one" }
+	);
+	check("userinfo: call fails closed", cred.payload.error !== null);
+	check("userinfo: password not echoed (source_url or message)", !JSON.stringify(cred.payload).includes("SECRET"), JSON.stringify(cred.payload.error));
+
+	check("unit: public default shown verbatim", feeds.redactRpcUrl("https://arb1.arbitrum.io/rpc") === "https://arb1.arbitrum.io/rpc");
+	check("unit: Alchemy-style path key dropped", feeds.redactRpcUrl("https://arb-mainnet.g.alchemy.com/v2/SECRET") === "https://arb-mainnet.g.alchemy.com/[redacted]");
+	check("unit: query key dropped", !feeds.redactRpcUrl("https://rpc.example/?key=SECRET").includes("SECRET"));
+	check("unit: default host with a different path is not verbatim", !feeds.redactRpcUrl("https://arb1.arbitrum.io/rpc/SECRET").includes("SECRET"));
+	check("unit: unparseable value is not echoed", feeds.redactRpcUrl("not a url SECRET") === "[RPC URL redacted]");
+}
+
 server.close();
 const failures = summary("chainlink feeds");
 process.exit(failures ? 1 : 0);

@@ -14,6 +14,7 @@ import { registerInquiryTool } from "./inquiryTool.js";
 import { registerSandboxTools } from "./sandboxTools.js";
 import { registerScreenerTools } from "./screenerTools.js";
 import { registerX402Tools } from "./x402Tools.js";
+import { registerChainlinkTools } from "./chainlinkTools.js";
 import {
 	registerDisclosureTool,
 	registerMemoTool,
@@ -86,6 +87,8 @@ export const createServer = (surface: ToolSurface = "stdio"): McpServer => {
 	 * and its purchase terms are unratified draft text, so a tool that quotes a
 	 * price against them should not appear in a tool list. */
 	registerX402Tools(server);
+	/* Read-only public Chainlink Data Feed reads; gated, stdio only. */
+	registerChainlinkTools(server);
 	return server;
 };
 

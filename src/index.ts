@@ -31,7 +31,7 @@ import {
  */
 export const createServer = (surface: ToolSurface = "stdio"): McpServer => {
 	const server = new McpServer(
-		{ name: "commertize", version: "0.1.0" },
+		{ name: "commertize", version: "0.2.0" },
 		{
 			capabilities: { tools: {} },
 			instructions:
@@ -95,7 +95,7 @@ const main = async (): Promise<void> => {
 	await server.connect(transport);
 	// stdout is the protocol channel. Diagnostics go to stderr, always.
 	console.error(
-		`commertize-mcp-server 0.1.0 ready on stdio (api: ${config.apiBaseUrl}, cache: ${config.cacheTtlMs}ms${
+		`commertize-mcp-server 0.2.0 ready on stdio (api: ${config.apiBaseUrl}, cache: ${config.cacheTtlMs}ms${
 			config.offeringsDisabled ? ", offerings: DISABLED" : ""
 		})`
 	);

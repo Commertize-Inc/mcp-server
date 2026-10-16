@@ -59,7 +59,7 @@ const OFFERING_LABELS: Record<string, string> = {
 const STATUS_LABELS: Record<string, string> = {
 	PENDING_REVIEW: "Pending review",
 	TOKENIZING: "Tokenizing — structuring and minting in progress",
-	ACTIVE: "Active — open for subscription by verified investors",
+	ACTIVE: "Active — open for subscription by investors who have completed onboarding",
 	FULLY_FUNDED: "Fully funded — closed to new subscriptions",
 	DISTRIBUTED: "Distributed — escrow released and tokens distributed",
 	REFUNDED: "Refunded — escrow returned to subscribers",

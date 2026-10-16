@@ -89,6 +89,28 @@ export const config = {
 		process.env.COMMERTIZE_MCP_ENABLE_X402 !== "1",
 
 	/**
+	 * Gate for the read-only Chainlink Data Feed tools (chainlinkTools.ts).
+	 *
+	 * Same fail-closed parse. Default DISABLED until the tool strings carry
+	 * certified wording; the reads themselves need no key and send no
+	 * transaction. Never registered over HTTP whatever this says.
+	 */
+	chainlinkFeedsDisabled:
+		process.env.COMMERTIZE_MCP_DISABLE_CHAINLINK_FEEDS === "1" ||
+		process.env.COMMERTIZE_MCP_ENABLE_CHAINLINK_FEEDS !== "1",
+
+	/**
+	 * Public RPC endpoints for those reads. Any override is checked with
+	 * `eth_chainId` before anything is read, so a wrong URL refuses rather
+	 * than reporting another chain's numbers.
+	 */
+	arbitrumRpcUrl:
+		(process.env.COMMERTIZE_MCP_ARBITRUM_RPC_URL ?? "").trim() ||
+		"https://arb1.arbitrum.io/rpc",
+	baseRpcUrl:
+		(process.env.COMMERTIZE_MCP_BASE_RPC_URL ?? "").trim() || "https://mainnet.base.org",
+
+	/**
 	 * Gate for `request_memo`, the server's only write.
 	 *
 	 * NOT a policy gate like the offerings one — a DEPLOYMENT gate. The route

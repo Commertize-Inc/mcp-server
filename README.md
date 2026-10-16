@@ -11,7 +11,7 @@ the two sponsor-services writes (`request_memo`, `file_sponsor_inquiry`), and th
 `sandbox_*` / `x402_*` groups — each behind its own explicit opt-in flag. See
 [What is actually live](#what-is-actually-live) and [Configuration](#configuration-all-optional-sane-defaults-point-at-production).
 
-Commertize is a digital capital markets platform for real-world assets. Sponsors list offerings on it, and investors complete identity verification on the platform before they can take part. This server is
+Commertize is a digital capital markets platform for real-world assets. Sponsors list offerings on it, and investors complete the platform's identity (KYC) checks, and accreditation checks where the offering's exemption requires them, before they can take part. This server is
 the read surface of that platform, nothing more.
 
 **Free. No API key. No account.** Every default tool reads a route that is public and
@@ -21,7 +21,7 @@ with every response.
 
 ## What is actually live
 
-Verified against `api.commertize.com` on 2026-09-10 by direct probe. A route that exists
+Checked against `api.commertize.com` on 2026-09-10 by direct probe. A route that exists
 answers 200/400/401 or a JSON 404; the plain-text `404 Not Found` below is the
 unmounted-route default.
 
@@ -51,7 +51,7 @@ ones that are off by default are marked.
 |---|---|---|
 | `list_offerings` | `status?`, `asset_class?`, `state?`, `limit?` | The public offering set: asset class, city/state, status, exemption type, sponsor, tokenomics, derived offering size, SPV leverage disclosure. |
 | `get_offering` | `offering_id` | One offering's full public detail. |
-| `get_disclosure_package` (off by default: `COMMERTIZE_MCP_ENABLE_DISCLOSURE=1`) | `offering_id` | One publishable offering's SIGNED machine-readable disclosure package — terms, waterfall, covenants, risk factors, attestations, minimum investment, transfer-restriction profile and reason codes — every field with a provenance and an as-of, plus the Ed25519 signature, key id, verification endpoints and a PDF rendered from the same data. Assets under evaluation are never served. Off by default, like the offerings tools; the API endpoint is itself flag-gated (`AGENTS_DISCLOSURE_ENABLED`). |
+| `get_disclosure_package` (off by default: `COMMERTIZE_MCP_ENABLE_DISCLOSURE=1`) | `offering_id` | One publishable offering's SIGNED machine-readable disclosure package — terms, waterfall, covenants, risk factors, attestations, minimum investment, transfer-restriction profile and reason codes — every field with a provenance and an as-of, plus the Ed25519 signature, key id, signature-check endpoints and a PDF rendered from the same data. Assets under evaluation are never served. Off by default, like the offerings tools; the API endpoint is itself flag-gated (`AGENTS_DISCLOSURE_ENABLED`). |
 | `get_news` | `limit?`, `category?`, `query?` | Published news and market commentary — headlines, summaries, categories, links. |
 | `get_article` | `slug` | One article's full body as plain text. |
 | `platform_info` | — | Curated "what is Commertize / what can an agent do here" reference text. Call this one first. |
@@ -63,7 +63,7 @@ ones that are off by default are marked.
 | `search_offerings` | free-text query + asset class / geography / status / exemption filters + numeric range filters (cap rate, cash-on-cash, IRR, equity multiple, hold period, lockup, offering size, minimum ticket, SPV leverage) | The filtered public set, sortable on any numeric field. Undisclosed values never silently match a range filter — they land in `excluded_not_disclosed`, and `field_coverage` reports how many candidates disclose each figure at all. |
 | `compare_offerings` | 2–5 `offering_ids` | Field-by-field comparison across offerings, with per-field disclosure/agreement counts — two undisclosed values are reported as two absences, never as agreement. |
 | `list_sponsors` | — | Every sponsor with a public offering: count, status/asset-class breakdown, states, summed target raise where disclosed. This is an inventory of platform listings, not a track record. |
-| `get_sponsor` | `sponsor` (id or name substring) | One sponsor's public listing record. Not a track record — prior deals, realized returns, AUM and verification status are not public data and are named as unavailable, not guessed at. |
+| `get_sponsor` | `sponsor` (id or name substring) | One sponsor's public listing record. Not a track record — prior deals, realized returns, AUM and onboarding status are not public data and are named as unavailable, not guessed at. |
 
 
 **Sponsor services — writes, OFF in the default build:**
@@ -78,7 +78,7 @@ build is the read-only tool set above; `platform_info` reports `read_only: true`
 
 ### What makes this safe to hand to an arbitrary agent
 
-- **Public data only.** Every route backing these tools has no auth middleware — verified route-by-route against the backend source, not assumed.
+- **Public data only.** Every route backing these tools has no auth middleware — checked route-by-route against the backend source, not assumed.
 - **No write tool by default.** As this server ships, every registered tool is a read and
   `platform_info` reports `read_only: true` — a value derived from the registered write
   list, not asserted. If a write gate is opened, the write tools file a request about the caller's OWN asset; `request_memo` takes no recipient address, so it cannot be used to mail a third party. Nothing in this server can subscribe, transfer, claim a distribution, or commit anyone to anything, and there are no credentials in the codebase — any agent key is read from the environment and only ever sent to Commertize's own API.
@@ -147,21 +147,21 @@ claude mcp add --transport http commertize <url>/mcp --header "Authorization: Be
 What is different over HTTP, by design:
 
 - **Every request needs a key.** `Authorization: Bearer cfa_…`, the agent-platform key
-  format. The key is verified against the API named by `COMMERTIZE_API_BASE_URL` at
+  format. The key is checked against the API named by `COMMERTIZE_API_BASE_URL` at
   `COMMERTIZE_MCP_KEY_INTROSPECT_PATH` (200 with the matching `key_id` = yes; 401/403 =
   no; anything else, or no answer, = 503 and the request is refused). There is no
-  anonymous mode and no "skip verification" switch. The route itself requires a service
+  anonymous mode and no "skip the key check" switch. The route itself requires a service
   secret (`COMMERTIZE_MCP_INTROSPECT_SECRET`, sent as `x-commertize-introspect-secret`);
   without one this server refuses every call with 503 and never calls upstream, and a
-  route that refuses OUR secret is reported as "cannot verify", never as "bad key".
-- **Caching, both ways, bounded.** A verified key is trusted for at most 15 s
+  route that refuses OUR secret is reported as "cannot check", never as "bad key".
+- **Caching, both ways, bounded.** A key that passed the check is trusted for at most 15 s
   (`COMMERTIZE_MCP_KEY_VERIFY_CACHE_MS`, hard ceiling 15 000 — an environment can lower
   it, not raise it) and never past the `expires_at` the route reported, so a revoked key
   works for at most 15 s. A refused key is remembered for
   `COMMERTIZE_MCP_KEY_NEGATIVE_CACHE_MS` (30 s) so a flood of one bad key costs one
   upstream call per window; a revocation is honoured at the first re-check, at most
   15 s away, and then remembered the same way.
-- **Per-IP verification brake.** Requests whose key is not answered from cache count
+- **Per-IP key-check brake.** Requests whose key is not answered from cache count
   against the client's address (`x-vercel-forwarded-for`, then `x-real-ip`, then the
   socket; never the caller-settable `x-forwarded-for`): `COMMERTIZE_MCP_HTTP_VERIFY_PER_IP_PER_MIN`
   (20) per minute, then 429 before any upstream call. The route's own Postgres-counted
@@ -202,11 +202,11 @@ handler, for self-hosting.
 | `COMMERTIZE_AGENT_KEY` | unset (`request_memo` refuses) | Agent credential from `POST /api/agents/register`. The only tool that reads it is `request_memo`; it is sent to Commertize's own API and nowhere else. |
 | `COMMERTIZE_MCP_ENABLE_INQUIRY` | unset (`file_sponsor_inquiry` is not registered) | Set to `1` only against an API whose `POST /contact` records the `agent` attribution object. The route itself is mounted on `api.commertize.com`; the attribution contract is what the gate waits for. |
 | `COMMERTIZE_MCP_HTTP_HOST` / `_PORT` | `127.0.0.1` / `3920` | Bind address of `dist/httpMain.js`. |
-| `COMMERTIZE_MCP_KEY_INTROSPECT_PATH` | `/agent-platform/keys/introspect` | Path on `COMMERTIZE_API_BASE_URL` that verifies a bearer key (HTTP transport only). |
+| `COMMERTIZE_MCP_KEY_INTROSPECT_PATH` | `/agent-platform/keys/introspect` | Path on `COMMERTIZE_API_BASE_URL` that checks a bearer key (HTTP transport only). |
 | `COMMERTIZE_MCP_INTROSPECT_SECRET` | unset (every HTTP request is 503; no upstream call) | Service secret the introspection route requires. Never logged or served. |
-| `COMMERTIZE_MCP_KEY_VERIFY_CACHE_MS` | `15000` (hard ceiling `15000`) | How long a verified key is trusted before re-checking; also bounded by the reported `expires_at`. |
+| `COMMERTIZE_MCP_KEY_VERIFY_CACHE_MS` | `15000` (hard ceiling `15000`) | How long a key that passed the check is trusted before re-checking; also bounded by the reported `expires_at`. |
 | `COMMERTIZE_MCP_KEY_NEGATIVE_CACHE_MS` | `30000` (ceiling `300000`) | How long a refused key is remembered without re-asking. |
-| `COMMERTIZE_MCP_HTTP_VERIFY_PER_IP_PER_MIN` | `20` | Per-client-IP ceiling on verification attempts (cache misses) per minute. |
+| `COMMERTIZE_MCP_HTTP_VERIFY_PER_IP_PER_MIN` | `20` | Per-client-IP ceiling on key-check attempts (cache misses) per minute. |
 | `COMMERTIZE_MCP_HTTP_RPM` / `COMMERTIZE_MCP_HTTP_INQUIRIES_PER_HOUR` | `60` / `2` | Per-key ceilings over HTTP. |
 | `COMMERTIZE_MCP_HTTP_MAX_BODY_BYTES` | `65536` | Largest JSON-RPC body accepted over HTTP. |
 | `COMMERTIZE_MCP_CONTENT_DIR` | unset (`content/` next to `dist/`) | Absolute path of `content/` when a packager moves the built files. |

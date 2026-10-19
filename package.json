@@ -2,7 +2,7 @@
 	"name": "commertize-mcp-server",
 	"version": "0.1.0",
 	"private": true,
-	"description": "Commertize Agents MCP server: Commertize public marketplace data (offerings, news, sponsors) as typed, read-only tools for AI agents.",
+	"description": "MCP server for Commertize, the digital capital markets platform for real-world assets.",
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/Commertize-Inc/mcp-server.git"

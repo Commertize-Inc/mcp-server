@@ -102,9 +102,22 @@ export const publicToolError = (message: string): CallToolResult => {
 	});
 };
 
-export const envelopeSdkToolErrors = (server: McpServer): void => {
-	(server as unknown as { createToolError: (m: string) => CallToolResult }).createToolError =
-		publicToolError;
+export const envelopeSdkToolErrors = (
+	server: McpServer,
+	onToolResult?: (tool: string, r: CallToolResult) => void
+): void => {
+	(server as unknown as { createToolError: (m: string) => CallToolResult }).createToolError = (
+		message: string
+	) => {
+		const r = publicToolError(message);
+		try {
+			// The tool name is not known here; the observer reads only the code.
+			onToolResult?.("(sdk)", r);
+		} catch {
+			/* an observer never changes a result */
+		}
+		return r;
+	};
 };
 
 /**
@@ -116,4 +129,11 @@ export const clientNameOf = (raw: unknown): string => {
 	if (typeof raw !== "string") return "unknown";
 	const t = raw.trim();
 	return /^[A-Za-z0-9._-]{1,40}$/.test(t) ? t : "unknown";
+};
+
+/** `clientInfo.version`, same idea: [A-Za-z0-9._+-], at most 20, else null. */
+export const clientVersionOf = (raw: unknown): string | null => {
+	if (typeof raw !== "string") return null;
+	const t = raw.trim();
+	return /^[A-Za-z0-9._+-]{1,20}$/.test(t) ? t : null;
 };

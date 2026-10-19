@@ -32,6 +32,8 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { isAllowedOverHttp, isInquiryTool } from "./httpAllowlist.js";
 import { parseBearer, type KeyVerifier } from "./httpAuth.js";
 import type { FixedWindowLimiter } from "./httpRateLimit.js";
+import { protocolVersionOf, srcOf } from "./analytics.js";
+import { clientNameOf, clientVersionOf } from "./publicSurface.js";
 
 export interface HttpLogEvent {
 	ts: string;
@@ -51,6 +53,11 @@ export interface HttpHandlerOptions {
 	maxBodyBytes: number;
 	version: string;
 	now?: () => number;
+	/**
+	 * Awaited AFTER the response is written and the request logged (analytics,
+	 * analytics.ts). Never allowed to throw into the request.
+	 */
+	afterResponse?: (e: HttpLogEvent) => Promise<void>;
 }
 
 export type NodeHandler = (
@@ -147,6 +154,11 @@ export const createHttpHandler = (o: HttpHandlerOptions): NodeHandler => {
 		let rpc: string[] = [];
 		let tool: string | null = null;
 		let outcome = "unhandled";
+		// Analytics context (analytics.ts): sanitised here, closed-set mapped there.
+		let clientName = "unknown";
+		let clientVersion: string | null = null;
+		let protocolVersion: unknown = undefined;
+		const src = srcOf(req.url);
 
 		const send = (
 			status: number,
@@ -282,7 +294,16 @@ export const createHttpHandler = (o: HttpHandlerOptions): NodeHandler => {
 				.filter((m) => m !== "");
 			for (const m of messages) {
 				if (!m || typeof m !== "object") continue;
-				const msg = m as { method?: unknown; id?: unknown; params?: { name?: unknown } };
+				const msg = m as {
+					method?: unknown;
+					id?: unknown;
+					params?: { name?: unknown; clientInfo?: { name?: unknown; version?: unknown }; protocolVersion?: unknown };
+				};
+				if (msg.method === "initialize") {
+					clientName = clientNameOf(msg.params?.clientInfo?.name);
+					clientVersion = clientVersionOf(msg.params?.clientInfo?.version);
+					protocolVersion = protocolVersionOf(msg.params?.protocolVersion);
+				}
 				if (msg.method !== "tools/call") continue;
 				const name = msg.params?.name;
 				tool = typeof name === "string" ? name : String(name);
@@ -350,7 +371,7 @@ export const createHttpHandler = (o: HttpHandlerOptions): NodeHandler => {
 			});
 			if (!res.headersSent) send(500, { error: "internal_error" });
 		} finally {
-			o.log({
+			const evt: HttpLogEvent = {
 				ts: new Date(now()).toISOString(),
 				event: "request",
 				method,
@@ -361,7 +382,19 @@ export const createHttpHandler = (o: HttpHandlerOptions): NodeHandler => {
 				status: res.statusCode,
 				outcome,
 				ms: now() - started,
-			});
+				client_name: clientName,
+				client_version: clientVersion,
+				protocol_version: protocolVersion,
+				src,
+			};
+			o.log(evt);
+			if (o.afterResponse) {
+				try {
+					await o.afterResponse(evt);
+				} catch {
+					/* analytics never reaches the request */
+				}
+			}
 		}
 	};
 };

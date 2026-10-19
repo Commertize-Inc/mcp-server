@@ -10,10 +10,16 @@ import { config } from "./config.js";
 import { KeyVerifier } from "./httpAuth.js";
 import { FixedWindowLimiter } from "./httpRateLimit.js";
 import { createHttpHandler, type HttpLogEvent, type NodeHandler } from "./httpServer.js";
+import { analyticsConfigFrom, createAnalyticsSink } from "./analytics.js";
 import { createOpenApiHandler, createPublicHttpHandler } from "./httpPublic.js";
 import { createServer } from "./index.js";
 
 export const VERSION = "0.2.0";
+
+// PostHog, off unless COMMERTIZE_MCP_ANALYTICS=1 and a phc_ key are set
+// (analytics.ts). Undefined sink = nothing is sent, on either surface.
+const analyticsSink =
+	createAnalyticsSink(analyticsConfigFrom(config.analyticsEnv, VERSION)) ?? undefined;
 
 /** One JSON object per line on stderr. stdout stays free for stdio mode. */
 export const logToStderr = (e: HttpLogEvent): void => {
@@ -37,6 +43,7 @@ export const buildHandler = (log: (e: HttpLogEvent) => void = logToStderr): Node
 		log,
 		maxBodyBytes: config.httpMaxBodyBytes,
 		version: VERSION,
+		afterResponse: analyticsSink,
 	});
 
 /** Module-level singleton: a warm serverless instance reuses its caches. */
@@ -53,9 +60,12 @@ export const buildPublicHandler = (
 	createPublicHttpHandler({
 		enabled: () => !config.publicDisabled,
 		ipLimiter: new FixedWindowLimiter(config.publicRequestsPerIpPerMinute, 60_000),
-		createServer: () => createServer("public"),
+		createServer: (onToolResult) => createServer("public", onToolResult),
 		log,
 		maxBodyBytes: config.httpMaxBodyBytes,
+		// PostHog, off unless COMMERTIZE_MCP_ANALYTICS=1 and a phc_ key are set
+		// (analytics.ts). Null sink = nothing is sent.
+		afterResponse: analyticsSink,
 	});
 
 export const publicHandler: NodeHandler = buildPublicHandler();

@@ -5,6 +5,8 @@
 import { publicHandler } from "../dist/httpEntry.js";
 
 export default function mcpPublic(req, res) {
-	req.url = "/mcp/public";
+	// Keep the query (`?src=` directory attribution, analytics.ts); the path stays pinned.
+	const q = (req.url ?? "").indexOf("?");
+	req.url = "/mcp/public" + (q >= 0 ? req.url.slice(q) : "");
 	return publicHandler(req, res);
 }

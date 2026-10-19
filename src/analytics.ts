@@ -17,6 +17,7 @@
  *     the response is written).
  */
 
+import { HTTP_TOOL_ALLOWLIST } from "./httpAllowlist.js";
 import type { HttpLogEvent } from "./httpServer.js";
 
 /**
@@ -120,42 +121,205 @@ export const clientVersionFor = (family: string, raw: unknown): string | null =>
 		? raw
 		: null;
 
-/** Map one public log event to a capture body, or null if it is not a tool call. */
-export const toCapture = (
-	e: HttpLogEvent,
-	cfg: Pick<AnalyticsConfig, "apiKey" | "serverVersion">
-): Record<string, unknown> | null => {
-	if (e.event !== "public_request") return null;
-	if (typeof e.tool !== "string" || e.tool === "") return null;
-	const str = (v: unknown) => (typeof v === "string" ? v : null);
-	const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
-	const family = clientFamilyOf(e.client_name);
-	return {
-		api_key: cfg.apiKey,
-		event: ANALYTICS_EVENT,
-		distinct_id: ANALYTICS_DISTINCT_ID,
-		timestamp: str(e.ts),
-		properties: {
-			tool: e.tool,
-			transport: "http_public",
-			outcome: str(e.outcome),
-			error_code: str(e.error_code),
-			http_status: num(e.status),
-			latency_ms: num(e.ms),
-			client_name: family,
-			client_version: clientVersionFor(family, e.client_version),
-			server_version: cfg.serverVersion,
-			$process_person_profile: false,
-			$geoip_disable: true,
-		},
-	};
+/*
+ * DELTA listing handoff 2026-10-19 F-1: five events, each from its OWN
+ * explicit allowlist. Every value that a caller can influence (src, client
+ * name/version, protocol version, tool name on the keyed surface, error
+ * codes) leaves only as a member of a closed set, else "other"/null.
+ */
+export const EVENTS = {
+	initialize: "mcp_initialize",
+	toolsList: "mcp_tools_list",
+	toolCall: ANALYTICS_EVENT,
+	authFailure: "mcp_auth_failure",
+	x402: "x402_payment",
+} as const;
+
+/**
+ * Directory attribution: `?src=` on the endpoint URL. Closed set; a missing
+ * or empty value is "none", anything else is "other". Adding a directory is
+ * a reviewed change to this list.
+ */
+export const SRC_VALUES = [
+	"mcp-registry",
+	"anthropic",
+	"smithery",
+	"glama",
+	"pulsemcp",
+	"mcpso",
+	"site",
+	"none",
+] as const;
+
+export const srcOf = (rawUrl: unknown): string => {
+	if (typeof rawUrl !== "string") return "none";
+	let v: string | null;
+	try {
+		v = new URL(rawUrl, "http://localhost").searchParams.get("src");
+	} catch {
+		return "none";
+	}
+	if (v === null || v === "") return "none";
+	return (SRC_VALUES as readonly string[]).includes(v) ? v : "other";
 };
+
+/** MCP protocol revisions are dates; anything else is "other". */
+export const protocolVersionOf = (raw: unknown): string | null => {
+	if (raw === undefined || raw === null) return null;
+	return typeof raw === "string" && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : "other";
+};
+
+/** The keyed-surface refusals that become `mcp_auth_failure`, and nothing else. */
+export const AUTH_FAILURE_CODES = [
+	"missing_credential",
+	"malformed_credential",
+	"invalid_credential",
+	"verifier_unavailable",
+	"verifier_not_configured",
+	"rate_limited",
+	"verify_rate_limited",
+] as const;
+
+const SURFACE_OF: Record<string, "public" | "keyed"> = {
+	public_request: "public",
+	request: "keyed",
+};
+
+const PRIVACY = { $process_person_profile: false, $geoip_disable: true } as const;
+
+type Cfg = Pick<AnalyticsConfig, "apiKey" | "serverVersion">;
+
+const envelope = (cfg: Cfg, event: string, ts: unknown, properties: Record<string, unknown>) => ({
+	api_key: cfg.apiKey,
+	event,
+	distinct_id: ANALYTICS_DISTINCT_ID,
+	timestamp: typeof ts === "string" ? ts : null,
+	properties: { ...properties, ...PRIVACY },
+});
+
+const str = (v: unknown) => (typeof v === "string" ? v : null);
+const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+const closed = (v: unknown, set: readonly string[]): string | null =>
+	typeof v === "string" ? (set.includes(v) ? v : "other") : null;
+
+
+const OUTCOME = /^[a-z_]{1,40}$/;
+const ERROR_CODE = /^[A-Z_]{1,40}$/;
+
+/**
+ * Map one request log event (public `public_request` or keyed `request`) to
+ * zero or more capture bodies. Nothing from the log event leaves except the
+ * named, closed-set properties below: no key id, IP, header, body, slug,
+ * argument, result or message, whatever a future log adds.
+ */
+export const toCaptures = (e: HttpLogEvent, cfg: Cfg): Record<string, unknown>[] => {
+	const surface = SURFACE_OF[e.event];
+	if (!surface) return [];
+	const out: Record<string, unknown>[] = [];
+	const src = closed(e.src, SRC_VALUES) ?? "none";
+	const family = clientFamilyOf(e.client_name);
+	const outcome = typeof e.outcome === "string" && OUTCOME.test(e.outcome) ? e.outcome : null;
+	const rpc = Array.isArray(e.rpc) ? e.rpc : [];
+
+	if (surface === "keyed" && (AUTH_FAILURE_CODES as readonly string[]).includes(String(e.outcome))) {
+		out.push(
+			envelope(cfg, EVENTS.authFailure, e.ts, {
+				surface,
+				error_code: e.outcome,
+				http_status: num(e.status),
+			})
+		);
+		return out;
+	}
+	if (rpc.includes("initialize") && num(e.status) === 200) {
+		out.push(
+			envelope(cfg, EVENTS.initialize, e.ts, {
+				surface,
+				client_family: family,
+				client_version: clientVersionFor(family, e.client_version),
+				protocol_version: protocolVersionOf(e.protocol_version),
+				src,
+				server_version: cfg.serverVersion,
+			})
+		);
+	}
+	if (rpc.includes("tools/list")) {
+		out.push(
+			envelope(cfg, EVENTS.toolsList, e.ts, {
+				surface,
+				client_family: family,
+				src,
+				outcome,
+				server_version: cfg.serverVersion,
+			})
+		);
+	}
+	if (typeof e.tool === "string" && e.tool !== "") {
+		const tool = surface === "public" || HTTP_TOOL_ALLOWLIST.has(e.tool) ? e.tool : "(refused)";
+		out.push(
+			envelope(cfg, EVENTS.toolCall, e.ts, {
+				tool,
+				transport: surface === "public" ? "http_public" : "http_keyed",
+				surface,
+				src,
+				outcome,
+				error_code: typeof e.error_code === "string" && ERROR_CODE.test(e.error_code) ? e.error_code : null,
+				http_status: num(e.status),
+				latency_ms: num(e.ms),
+				client_name: family,
+				client_version: clientVersionFor(family, e.client_version),
+				server_version: cfg.serverVersion,
+			})
+		);
+	}
+	return out;
+};
+
+/** The `mcp_tool_call` capture for one log event, or null (#5's original API). */
+export const toCapture = (e: HttpLogEvent, cfg: Cfg): Record<string, unknown> | null =>
+	toCaptures(e, cfg).find((c) => c.event === EVENTS.toolCall) ?? null;
+
+/** USDC amount (decimal string or number, in whole USDC) to a coarse band. */
+export const usdcBandOf = (amountUsdc: unknown): string | null => {
+	const n = typeof amountUsdc === "number" ? amountUsdc : typeof amountUsdc === "string" && /^\d{1,12}(\.\d{1,6})?$/.test(amountUsdc) ? Number(amountUsdc) : NaN;
+	if (!Number.isFinite(n) || n < 0) return null;
+	return n < 1 ? "<1" : n <= 10 ? "1-10" : ">10";
+};
+
+/**
+ * `x402_payment`, DARK: the x402 tools are not on any HTTP surface
+ * (httpAllowlist.ts), and stdio never imports this module, so nothing calls
+ * this today. It exists so the event is reviewed before x402 reaches HTTP.
+ * Never a payer address, signature, tx hash or nonce: the input type has no
+ * field for one, and the output is built from the five named values only.
+ */
+export const toX402Capture = (
+	x: {
+		ts: string;
+		stage: unknown;
+		resourceId: unknown;
+		knownResourceIds: readonly string[];
+		amountUsdc: unknown;
+		outcome: unknown;
+		errorCode: unknown;
+	},
+	cfg: Cfg
+): Record<string, unknown> =>
+	envelope(cfg, EVENTS.x402, x.ts, {
+		stage: closed(x.stage, ["quote", "settle"]),
+		resource_id: closed(x.resourceId, x.knownResourceIds),
+		amount_usdc_band: usdcBandOf(x.amountUsdc),
+		outcome: typeof x.outcome === "string" && OUTCOME.test(x.outcome) ? x.outcome : null,
+		error_code: typeof x.errorCode === "string" && ERROR_CODE.test(x.errorCode) ? x.errorCode : null,
+		server_version: cfg.serverVersion,
+	});
 
 export type FetchLike = (url: string, init: RequestInit) => Promise<{ ok: boolean }>;
 
 /**
  * Returns an async sink, or null when analytics is off. The handler awaits it
  * AFTER the response is written, so a slow PostHog never delays a client.
+ * Each capture is its own POST, sent in parallel, each under the timeout.
  */
 export const createAnalyticsSink = (
 	cfg: AnalyticsConfig,
@@ -164,17 +328,25 @@ export const createAnalyticsSink = (
 	if (!cfg.enabled) return null;
 	const url = `${cfg.host}/i/v0/e/`;
 	return async (e) => {
-		const body = toCapture(e, cfg);
-		if (!body) return;
+		let bodies: Record<string, unknown>[];
 		try {
-			await fetchImpl(url, {
-				method: "POST",
-				headers: { "content-type": "application/json" },
-				body: JSON.stringify(body),
-				signal: AbortSignal.timeout(cfg.timeoutMs),
-			});
+			bodies = toCaptures(e, cfg);
 		} catch {
-			/* best effort: dropped, never thrown */
+			return;
 		}
+		await Promise.all(
+			bodies.map(async (body) => {
+				try {
+					await fetchImpl(url, {
+						method: "POST",
+						headers: { "content-type": "application/json" },
+						body: JSON.stringify(body),
+						signal: AbortSignal.timeout(cfg.timeoutMs),
+					});
+				} catch {
+					/* best effort: dropped, never thrown */
+				}
+			})
+		);
 	};
 };

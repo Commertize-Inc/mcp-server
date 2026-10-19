@@ -29,7 +29,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
-import { uaProductOf } from "./analytics.js";
+import { protocolVersionOf, srcOf, uaProductOf } from "./analytics.js";
 import type { FixedWindowLimiter } from "./httpRateLimit.js";
 import { clientIpOf, type HttpLogEvent, type NodeHandler } from "./httpServer.js";
 import { clientNameOf, clientVersionOf, isPublicTool } from "./publicSurface.js";
@@ -101,6 +101,9 @@ export const createPublicHttpHandler = (o: PublicHandlerOptions): NodeHandler =>
 		let clientName: string = ua.name;
 		let clientVersion: string | null = ua.version;
 		let errorCode: string | null = null;
+		let protocolVersion: unknown = undefined;
+		// Directory attribution from `?src=`, a closed set (analytics.ts srcOf).
+		const src = srcOf(req.url);
 		let outcome = "unhandled";
 
 		const send = (status: number, body: unknown, extra: Record<string, string> = {}): void => {
@@ -161,11 +164,12 @@ export const createPublicHttpHandler = (o: PublicHandlerOptions): NodeHandler =>
 				const msg = m as {
 					method?: unknown;
 					id?: unknown;
-					params?: { name?: unknown; clientInfo?: { name?: unknown; version?: unknown } };
+					params?: { name?: unknown; clientInfo?: { name?: unknown; version?: unknown }; protocolVersion?: unknown };
 				};
 				if (msg.method === "initialize") {
 					clientName = clientNameOf(msg.params?.clientInfo?.name);
 					clientVersion = clientVersionOf(msg.params?.clientInfo?.version);
+					protocolVersion = protocolVersionOf(msg.params?.protocolVersion);
 				}
 				if (msg.method !== "tools/call") continue;
 				const name = msg.params?.name;
@@ -226,6 +230,8 @@ export const createPublicHttpHandler = (o: PublicHandlerOptions): NodeHandler =>
 				tool,
 				client_name: clientName,
 				client_version: clientVersion,
+				protocol_version: protocolVersion,
+				src,
 				status: res.statusCode,
 				outcome,
 				error_code: errorCode,

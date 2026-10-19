@@ -242,3 +242,79 @@ export const createPublicHttpHandler = (o: PublicHandlerOptions): NodeHandler =>
 		}
 	};
 };
+
+/**
+ * `GET /openapi.json`: a description of the keyless surface for directories
+ * (DELTA listing handoff 2026-10-19 F-2). Same gate as `/mcp/public`: closed
+ * means 404, so the document never advertises an endpoint that answers 404.
+ * The keyed `/mcp` is left out on purpose (a directory reader cannot obtain a
+ * key). Summary strings are DELTA's draft §7 and wait on AXIOM certification
+ * before the gate opens.
+ */
+export const OPENAPI_PATH = "/openapi.json";
+
+export const OPENAPI_DOCUMENT = {
+	openapi: "3.1.0",
+	info: {
+		title: "Commertize Agents",
+		version: "0.1.0",
+		description:
+			"MCP server for Commertize, the digital capital markets platform for real-world assets.",
+	},
+	servers: [{ url: "https://agents.commertize.com" }],
+	paths: {
+		"/health": {
+			get: {
+				summary: "Service status",
+				responses: { "200": { description: "JSON status" } },
+			},
+		},
+		[PUBLIC_PATH]: {
+			post: {
+				summary:
+					"MCP Streamable HTTP endpoint, no key (get_news, get_article, platform_info)",
+				requestBody: {
+					required: true,
+					content: {
+						"application/json": {
+							schema: {
+								type: "object",
+								required: ["jsonrpc", "method"],
+								properties: {
+									jsonrpc: { const: "2.0" },
+									id: {},
+									method: { type: "string" },
+									params: { type: "object" },
+								},
+							},
+						},
+					},
+				},
+				responses: {
+					"200": { description: "JSON-RPC result" },
+					"403": { description: "Tool not on the public surface" },
+				},
+			},
+		},
+	},
+} as const;
+
+export const createOpenApiHandler = (o: { enabled: () => boolean }): NodeHandler => {
+	const body = JSON.stringify(OPENAPI_DOCUMENT, null, 2);
+	return async (req, res) => {
+		const path = new URL(req.url ?? "/", "http://localhost").pathname;
+		const method = (req.method ?? "GET").toUpperCase();
+		if (!o.enabled() || path !== OPENAPI_PATH) {
+			res.writeHead(404, JSON_HEADERS);
+			res.end(JSON.stringify({ error: "not_found" }));
+			return;
+		}
+		if (method !== "GET" && method !== "HEAD") {
+			res.writeHead(405, { ...JSON_HEADERS, allow: "GET, HEAD" });
+			res.end(JSON.stringify({ error: "method_not_allowed" }));
+			return;
+		}
+		res.writeHead(200, JSON_HEADERS);
+		res.end(method === "HEAD" ? undefined : body);
+	};
+};

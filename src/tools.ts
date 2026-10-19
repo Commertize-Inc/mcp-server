@@ -456,7 +456,7 @@ export const registerTools = (
 				articles: z.array(articleSummarySchema),
 				count: z.number(),
 			},
-			annotations: { readOnlyHint: true, openWorldHint: true },
+			annotations: { title: "Get Commertize news and market commentary", readOnlyHint: true, openWorldHint: true },
 		},
 		async (args) => {
 			const empty = { articles: [], count: 0 };
@@ -507,7 +507,7 @@ export const registerTools = (
 				disclaimer_block: disclaimerBlockSchema,
 				article: articleFullSchema.nullable(),
 			},
-			annotations: { readOnlyHint: true, openWorldHint: true },
+			annotations: { title: "Get one Commertize article", readOnlyHint: true, openWorldHint: true },
 		},
 		async ({ slug }) => {
 			const empty = { article: null };
@@ -583,7 +583,7 @@ export const registerTools = (
 					})
 					.describe("Machine-readable summary of this server's surface."),
 			},
-			annotations: { readOnlyHint: true, openWorldHint: false },
+			annotations: { title: "About Commertize", readOnlyHint: true, openWorldHint: false },
 		},
 		async () => {
 			/*

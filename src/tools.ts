@@ -39,7 +39,7 @@ import { SCREENER_TOOL_NAMES } from "./screenerTools.js";
 import { X402_TOOL_NAMES } from "./x402Tools.js";
 import { HTTP_TOOL_ALLOWLIST } from "./httpAllowlist.js";
 import { INQUIRY_TOOL_NAME } from "./inquiryTool.js";
-import { PUBLIC_TOOL_SET, withPublicDisclaimer } from "./publicSurface.js";
+import { PUBLIC_TOOL_SET, withPublicDisclaimer, type PublicErrorDetail } from "./publicSurface.js";
 import {
 	DISCLAIMER_BLOCK_TOOLS,
 	disclaimerBlockSchema,
@@ -173,7 +173,7 @@ export const registerTools = (
 	server: McpServer,
 	surface: ToolSurface = "stdio",
 	// Public surface only: sees each (disclaimer-swapped) result, for analytics.
-	onToolResult?: (tool: string, r: CallToolResult) => void
+	onToolResult?: (tool: string, r: CallToolResult, d?: PublicErrorDetail) => void
 ): void => {
 	/*
 	 * Every registration below goes through `register`. On the stdio and
@@ -195,11 +195,13 @@ export const registerTools = (
 				? cb
 				: async (...a: unknown[]) => {
 						let r = (await cb(...a)) as CallToolResult;
-						if (pub) r = withPublicDisclaimer(r);
+						// H1: the raw error cause, for the server-side log only.
+						let detail: PublicErrorDetail | undefined;
+						if (pub) r = withPublicDisclaimer(r, (d) => (detail = d));
 						if (block) r = withDisclaimerBlock(r);
 						if (pub) {
 							try {
-								onToolResult?.(name, r);
+								onToolResult?.(name, r, detail);
 							} catch {
 								/* an observer never changes a result */
 							}
@@ -497,9 +499,12 @@ export const registerTools = (
 			description:
 				"Full published text of a single Commertize news or commentary article, by slug (from get_news). Markup and embedded metadata are stripped.",
 			inputSchema: {
+				// AEGIS L4-3: bounded before any upstream call (the SDK
+				// validates before this handler runs).
 				slug: z
 					.string()
 					.min(1)
+					.max(200)
 					.describe('Article slug, e.g. "the-oracle-layer-for-rwa-tokenization-explained".'),
 			},
 			outputSchema: {

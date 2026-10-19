@@ -41,6 +41,7 @@ const SUITES = [
 	["client ip /64 bucketing (offline)", "client-ip.mjs", { live: false }],
 	["public no-login endpoint e2e (stub upstream)", "public-e2e.mjs", { live: false }],
 	["language", "language-check.mjs", { live: false }],
+	["listing readiness (offline)", "listing-readiness.mjs", { live: false }],
 ];
 
 const run = (file) =>

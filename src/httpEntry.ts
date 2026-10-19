@@ -10,7 +10,7 @@ import { config } from "./config.js";
 import { KeyVerifier } from "./httpAuth.js";
 import { FixedWindowLimiter } from "./httpRateLimit.js";
 import { createHttpHandler, type HttpLogEvent, type NodeHandler } from "./httpServer.js";
-import { createPublicHttpHandler } from "./httpPublic.js";
+import { createOpenApiHandler, createPublicHttpHandler } from "./httpPublic.js";
 import { createServer } from "./index.js";
 
 export const VERSION = "0.1.0";
@@ -59,3 +59,8 @@ export const buildPublicHandler = (
 	});
 
 export const publicHandler: NodeHandler = buildPublicHandler();
+
+/** `GET /openapi.json`, behind the same gate as `/mcp/public`. */
+export const openApiHandler: NodeHandler = createOpenApiHandler({
+	enabled: () => !config.publicDisabled,
+});

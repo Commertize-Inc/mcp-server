@@ -1,15 +1,18 @@
 /**
- * The standing disclaimer carried by every tool response, success or error.
+ * The standing disclaimer carried by every tool response, success or error,
+ * on every surface (stdio, keyed HTTP, public HTTP).
  *
- * One constant, one wording. If it needs to change it changes here, and the
- * language test asserts the four load-bearing clauses are still present.
+ * AXIOM-certified D-1 (ruling 2026-10-15 §3), byte-exact. Id = apx- +
+ * sha1(UTF-8 bytes)[:10]. One constant, one wording: if it needs to change it
+ * changes here, under a new certification, and the language test asserts the
+ * id and the four load-bearing clauses.
  */
 export const DISCLAIMER =
-	"Informational only. Securities are offered under Regulation D only to investors who complete the platform's identity (KYC) checks and, where the exemption requires it, accreditation checks.  " +
-	"Nothing provided by this server is an offer to sell or a solicitation of an offer to buy " +
-	"any security, and nothing here is investment, legal, or tax advice or a recommendation. " +
-	"Agent access is informational; it confers no authority to transact. " +
-	"Data is served as-is from Commertize's public API and may be incomplete or out of date.";
+	"Reference information only. Nothing provided by this server is an offer to sell or a " +
+	"solicitation of an offer to buy any security. Nothing here is investment, legal or tax " +
+	"advice or a recommendation. Agent access confers no authority to transact. Data may be " +
+	"incomplete or out of date.";
+export const DISCLAIMER_ID = "apx-b88a8f669d";
 
 /**
  * Attached to any field a sponsor supplied as a forward-looking figure.

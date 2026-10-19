@@ -291,15 +291,35 @@ export const htmlToText = (html: string): string =>
 		.replace(/\n{3,}/g, "\n\n")
 		.trim();
 
+/**
+ * Characters a reader cannot see but a model reads: Unicode format (Cf:
+ * zero-width, bidi overrides and isolates, tag characters U+E0000-E007F),
+ * private-use, variation selectors, and C0/C1 controls other than tab and
+ * newline. Article text is served to third-party agents under Commertize's
+ * name, so an invisible instruction laundered into a published article must
+ * not ride along (AEGIS PR #4 F4-3).
+ */
+const INVISIBLE =
+	/[\p{Cf}\p{Co}\u{E0000}-\u{E007F}︀-️\u{E0100}-\u{E01EF}\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/gu;
+
+export const stripInvisible = (s: string): string => s.replace(INVISIBLE, "");
+
+/** `str` for text an agent will read: invisible characters removed first. */
+const agentStr = (v: unknown): string | null =>
+	typeof v === "string" ? str(stripInvisible(v)) : null;
+
 export const normalizeArticleSummary = (raw: RawArticle) => {
 	const slug = str(raw.slug);
 	return {
 		slug,
-		title: str(raw.title),
-		summary: str(raw.summary),
-		category: str(raw.category),
+		title: agentStr(raw.title),
+		summary: agentStr(raw.summary),
+		category: agentStr(raw.category),
 		tags: Array.isArray(raw.tags)
-			? raw.tags.filter((t): t is string => typeof t === "string")
+			? raw.tags
+					.filter((t): t is string => typeof t === "string")
+					.map(stripInvisible)
+					.filter((t) => t.trim() !== "")
 			: [],
 		published_at: str(raw.publishedAt),
 		read_time_minutes: num(raw.readTime),
@@ -312,6 +332,6 @@ export const normalizeArticleFull = (raw: RawArticle) => {
 	const html = str(raw.content);
 	return {
 		...normalizeArticleSummary(raw),
-		content_text: html ? htmlToText(html) : null,
+		content_text: html ? str(stripInvisible(htmlToText(html))) : null,
 	};
 };

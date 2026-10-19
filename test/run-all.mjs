@@ -39,7 +39,9 @@ const SUITES = [
 	["deployment gates (offline)", "gates-e2e.mjs", { live: false }],
 	["streamable http e2e (stub upstream)", "http-e2e.mjs", { live: false }],
 	["client ip /64 bucketing (offline)", "client-ip.mjs", { live: false }],
+	["public no-login endpoint e2e (stub upstream)", "public-e2e.mjs", { live: false }],
 	["language", "language-check.mjs", { live: false }],
+	["listing readiness (offline)", "listing-readiness.mjs", { live: false }],
 	["wording guard (AXIOM 10-16)", "wording-guard.mjs", { live: false }],
 	["readme directory profile (offline)", "readme-profile.mjs", { live: false }],
 ];

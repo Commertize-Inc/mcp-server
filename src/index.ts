@@ -11,6 +11,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 
 import { config } from "./config.js";
 import { registerInquiryTool } from "./inquiryTool.js";
+import { envelopeSdkToolErrors } from "./publicSurface.js";
 import { registerSandboxTools } from "./sandboxTools.js";
 import { registerScreenerTools } from "./screenerTools.js";
 import { registerX402Tools } from "./x402Tools.js";
@@ -30,6 +31,21 @@ import {
  *   refuses them by name on top, so a slip here is still a 403.
  */
 export const createServer = (surface: ToolSurface = "stdio"): McpServer => {
+	/*
+	 * The no-login public surface (`/mcp/public`, publicSurface.ts): the three
+	 * reads that return data today and nothing else. No `instructions` string:
+	 * the server-wide one describes offering data this surface never serves,
+	 * and new copy for it waits on certification.
+	 */
+	if (surface === "public") {
+		const pub = new McpServer(
+			{ name: "commertize", version: "0.1.0" },
+			{ capabilities: { tools: {} } }
+		);
+		registerTools(pub, "public");
+		envelopeSdkToolErrors(pub);
+		return pub;
+	}
 	const server = new McpServer(
 		{ name: "commertize", version: "0.2.0" },
 		/*

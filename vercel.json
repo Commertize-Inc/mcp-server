@@ -11,6 +11,8 @@
 	},
 	"rewrites": [
 		{ "source": "/mcp", "destination": "/api/mcp" },
+		{ "source": "/mcp/public", "destination": "/api/mcp-public" },
+		{ "source": "/openapi.json", "destination": "/api/openapi" },
 		{ "source": "/health", "destination": "/api/health" }
 	],
 	"headers": [

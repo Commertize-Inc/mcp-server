@@ -2,7 +2,7 @@
 	"name": "commertize-mcp-server",
 	"version": "0.2.0",
 	"private": true,
-	"description": "Read-only public data on real-world-asset offerings, sponsors and news, for agents.",
+	"description": "MCP server for Commertize, the digital capital markets platform for real-world assets.",
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/Commertize-Inc/mcp-server.git"

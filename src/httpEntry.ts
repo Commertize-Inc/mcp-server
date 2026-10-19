@@ -14,7 +14,7 @@ import { analyticsConfigFrom, createAnalyticsSink } from "./analytics.js";
 import { createOpenApiHandler, createPublicHttpHandler } from "./httpPublic.js";
 import { createServer } from "./index.js";
 
-export const VERSION = "0.1.0";
+export const VERSION = "0.2.0";
 
 // PostHog, off unless COMMERTIZE_MCP_ANALYTICS=1 and a phc_ key are set
 // (analytics.ts). Undefined sink = nothing is sent, on either surface.

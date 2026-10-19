@@ -170,7 +170,7 @@ export const config = {
 	 * base-URL switch moves every upstream call together. The route must
 	 * answer 200 for a live key and 401 for anything else; any other answer,
 	 * or no answer, is "cannot verify" and the request is refused with 503.
-	 * There is no "skip verification" switch: an HTTP server that cannot
+	 * There is no "skip the key check" switch: an HTTP server that cannot
 	 * reach its verifier refuses every call.
 	 */
 	keyIntrospectPath:
@@ -270,5 +270,5 @@ export const config = {
 	 */
 	contentDir: process.env.COMMERTIZE_MCP_CONTENT_DIR ?? "",
 
-	userAgent: "commertize-mcp-server/0.1.0 (+https://commertize.com)",
+	userAgent: "commertize-mcp-server/0.2.0 (+https://commertize.com)",
 } as const;

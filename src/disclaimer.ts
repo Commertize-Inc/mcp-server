@@ -20,7 +20,7 @@ export const DISCLAIMER_ID = "apx-b88a8f669d";
  */
 export const PROJECTION_NOTE =
 	"Sponsor-supplied projections. Projections are estimates, not statements of fact, " +
-	"and may not be achieved. Verify against the offering documents.";
+	"and may not be achieved. Check them against the offering documents.";
 
 /**
  * Attached to Rule 506(b) offerings. 506(b) prohibits general solicitation;
@@ -29,4 +29,4 @@ export const PROJECTION_NOTE =
 export const RULE_506B_NOTE =
 	"This offering is structured under Rule 506(b), which does not permit general solicitation. " +
 	"This record is informational reference data, not an offer, and participation requires an " +
-	"existing relationship plus investor verification.";
+	"existing relationship plus completion of the platform's investor onboarding checks.";

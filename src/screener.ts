@@ -633,7 +633,7 @@ export const SPONSOR_NOT_AVAILABLE: readonly string[] = [
 	"assets_under_management",
 	"principals",
 	"years_in_business",
-	"sponsor_verification_status",
+	"sponsor_onboarding_status",
 	"contact_details",
 ] as const;
 

@@ -1,11 +1,11 @@
 ---
 name: commertize
-description: Read the Commertize marketplace of tokenized real-world assets — list live offerings and their public terms (asset class, location, status, exemption, tokenomics, SPV leverage disclosure) and read published market commentary. Use for questions about what is listed on Commertize, how a specific Commertize offering is structured, or how the platform verifies investors and sponsors. Do NOT use for other tokenization platforms, for generic real-estate data, or to transact — nothing here can transact, and as the server ships it has no write tool at all.
+description: Read the Commertize marketplace of tokenized real-world assets — list live offerings and their public terms (asset class, location, status, exemption, tokenomics, SPV leverage disclosure) and read published market commentary. Use for questions about what is listed on Commertize, how a specific Commertize offering is structured, or how the platform onboards investors and sponsors. Do NOT use for other tokenization platforms, for generic real-estate data, or to transact — nothing here can transact, and as the server ships it has no write tool at all.
 ---
 
 # Commertize
 
-Commertize is a digital capital markets platform for real-world assets. Sponsors list offerings on it, and investors complete identity verification on the platform before they can take part.
+Commertize is a digital capital markets platform for real-world assets. Sponsors list offerings on it, and investors complete the platform's identity (KYC) checks, and accreditation checks where the offering's exemption requires them, before they can take part.
 
 This skill covers the **public, read-only** surface. Everything below can be called
 with no credentials. There is no authenticated route, no key, and no action that moves
@@ -106,18 +106,15 @@ research.
 - Each distribution the issuer declares is calculated and recorded per holder. Frequency
   and waterfall terms are set per offering and are disclosed in that offering's
   documents.
-- A token moves only between wallets verified in the identity registry or exempted by
-  the platform; minting needs a verified or exempt receiver.
+- A token moves only between wallets registered in the identity registry or exempted by the platform; minting needs a registered or exempt receiver.
 
-## 6. Verification and who may participate
+## 6. Onboarding and who may participate
 
-- Investors complete identity verification and sanctions screening before they can
+- Investors complete identity (KYC) checks and sanctions screening before they can
   subscribe; accreditation is established where the exemption requires it.
-- Sponsors complete business verification covering the entity, its beneficial owners,
+- Sponsors complete business (KYB) checks covering the entity, its beneficial owners,
   and its authority to make the offering, before a listing goes live.
-- Verification attaches to a natural or legal person. An agent has no standing of its
-  own; any agent-initiated action must resolve to a verified principal who
-  authorised it.
+- Onboarding attaches to a natural or legal person. An agent has no standing of its own; any agent-initiated action must resolve to an onboarded principal who authorised it.
 
 ## Rules for agents using this skill
 
@@ -126,7 +123,7 @@ research.
    `tools/list` is all reads. Where an operator has enabled it, it still moves no value:
    it records a request for a memo about the user's own asset. Nothing subscribes,
    transfers, claims, or commits anyone to anything. If a user asks you to invest,
-   explain that participation runs through verified onboarding at
+   explain that participation runs through the platform's onboarding at
    https://app.commertize.com and stop.
 2. **Never present this data as an offer.** Offerings are private placements under
    exemptions from registration. Rule 506(b) offerings in particular permit no general

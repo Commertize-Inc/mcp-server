@@ -43,6 +43,8 @@ const SUITES = [
 	["public endpoint analytics (stub upstream)", "analytics-e2e.mjs", { live: false }],
 	["language", "language-check.mjs", { live: false }],
 	["listing readiness (offline)", "listing-readiness.mjs", { live: false }],
+	["wording guard (AXIOM 10-16)", "wording-guard.mjs", { live: false }],
+	["readme directory profile (offline)", "readme-profile.mjs", { live: false }],
 ];
 
 const run = (file) =>

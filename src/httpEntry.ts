@@ -13,7 +13,7 @@ import { createHttpHandler, type HttpLogEvent, type NodeHandler } from "./httpSe
 import { createOpenApiHandler, createPublicHttpHandler } from "./httpPublic.js";
 import { createServer } from "./index.js";
 
-export const VERSION = "0.1.0";
+export const VERSION = "0.2.0";
 
 /** One JSON object per line on stderr. stdout stays free for stdio mode. */
 export const logToStderr = (e: HttpLogEvent): void => {

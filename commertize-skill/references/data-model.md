@@ -5,7 +5,7 @@
 | Code | Meaning | Open for subscription |
 |---|---|---|
 | `TOKENIZING` | Entities and contracts being finalised, tokens being minted | No |
-| `ACTIVE` | Live offering, accepting subscriptions from verified investors | **Yes** |
+| `ACTIVE` | Live offering, accepting subscriptions from investors who have completed onboarding | **Yes** |
 | `FULLY_FUNDED` | Allocation reached, closed to new subscriptions | No |
 | `DISTRIBUTED` | Escrow released and tokens distributed | No |
 | `REFUNDED` | Escrow returned to subscribers | No |
@@ -19,7 +19,7 @@ Only `ACTIVE`, `FULLY_FUNDED`, and `TOKENIZING` appear in the public list respon
 | Code | Exemption | Participation |
 |---|---|---|
 | `RULE_506_B` | Regulation D, Rule 506(b) | No general solicitation. Requires a pre-existing substantive relationship. |
-| `RULE_506_C` | Regulation D, Rule 506(c) | General solicitation permitted; every purchaser must be a verified accredited investor. |
+| `RULE_506_C` | Regulation D, Rule 506(c) | General solicitation permitted; every purchaser must be an accredited investor, and the issuer must take reasonable steps to confirm that status. |
 | `REG_A` | Regulation A | Tier-based caps and disclosure requirements. |
 | `REG_CF` | Regulation Crowdfunding | Portal-based, capped. |
 | `REG_S` | Regulation S | Offshore. |

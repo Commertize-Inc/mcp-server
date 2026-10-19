@@ -329,7 +329,7 @@ section("catalogue and terms");
 	);
 	check(
 		"terms tells the caller to hash it themselves",
-		/SHA-256/.test(terms.verify),
+		/SHA-256/.test(terms.how_to_check),
 	);
 	await client.close();
 }

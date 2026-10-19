@@ -716,7 +716,7 @@ server.registerTool(
 	{
 		title: "Get one offering's signed, machine-readable disclosure package",
 		description:
-			"The structured disclosure package for one publishable offering: terms, waterfall, covenants, risk factors, attestations, the ratified minimum investment, and the transfer-restriction profile with its reason-code table. Every field carries a provenance (sponsor_reported, platform_derived, platform_policy, third_party_attested, not_disclosed) and an as-of. The package is signed by Commertize's server key (Ed25519 over canonical JSON); the signature, the key id and the verification endpoints are relayed so you can check it yourself, and a PDF rendered from the same signed data is linked. An asset under evaluation is never served here. Informational reference data — not an offer, solicitation, or recommendation.",
+			"The structured disclosure package for one publishable offering: terms, waterfall, covenants, risk factors, attestations, the ratified minimum investment, and the transfer-restriction profile with its reason-code table. Every field carries a provenance (sponsor_reported, platform_derived, platform_policy, third_party_attested, not_disclosed) and an as-of. The package is signed by Commertize's server key (Ed25519 over canonical JSON); the signature, the key id and the public-key and signature-check endpoints are relayed so you can check it yourself, and a PDF rendered from the same signed data is linked. An asset under evaluation is never served here. Informational reference data — not an offer, solicitation, or recommendation.",
 		inputSchema: {
 			offering_id: z
 				.string()
@@ -738,15 +738,15 @@ server.registerTool(
 					value: z.string(),
 				})
 				.nullable(),
-			verify: z
-				.object({ keys_url: z.string(), verify_url: z.string() })
+			signature_check: z
+				.object({ keys_url: z.string(), check_url: z.string() })
 				.nullable(),
 			pdf_url: z.string().nullable(),
 		},
 		annotations: { readOnlyHint: true, openWorldHint: true },
 	},
 	async ({ offering_id }) => {
-		const empty = { package: null, signature: null, verify: null, pdf_url: null };
+		const empty = { package: null, signature: null, signature_check: null, pdf_url: null };
 		if (config.offeringsDisabled) return disabled(empty);
 		const path = `/api/offerings/v1/${encodeURIComponent(offering_id)}/disclosure`;
 		const url = `${config.apiBaseUrl}${path}`;
@@ -790,9 +790,9 @@ server.registerTool(
 					sha256: String(b.signature.sha256 ?? ""),
 					value: String(b.signature.value ?? ""),
 				},
-				verify: {
+				signature_check: {
 					keys_url: String(b.verify?.keysUrl ?? ""),
-					verify_url: String(b.verify?.verifyUrl ?? ""),
+					check_url: String(b.verify?.verifyUrl ?? ""),
 				},
 				pdf_url: b.pdfUrl ? String(b.pdfUrl) : null,
 			});
@@ -906,7 +906,7 @@ server.registerTool(
 					sla_basis: z.string().describe("Basis of any turnaround figure, relayed from the API; \"none\" when the API states none. This server commits to no turnaround."),
 					memo_goes_to: z.string(),
 					next: z.string(),
-					not_verified: z.string(),
+					not_checked: z.string(),
 				})
 				.nullable(),
 		},
@@ -968,7 +968,7 @@ server.registerTool(
 					sla_basis: String(b.slaBasis ?? "none"),
 					memo_goes_to: String(b.memoGoesTo ?? ""),
 					next: String(b.whatHappensNext ?? ""),
-					not_verified: String(b.gate0 ?? ""),
+					not_checked: String(b.gate0 ?? ""),
 				},
 				as_of: res.sentAt.toISOString(),
 				source_url: res.sourceUrl,

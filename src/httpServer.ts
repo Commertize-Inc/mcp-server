@@ -207,7 +207,7 @@ export const createHttpHandler = (o: HttpHandlerOptions): NodeHandler => {
 						429,
 						{
 							error: "rate_limited",
-							message: `Too many key verifications from this client. Retry after ${brake.retryAfterSeconds}s.`,
+							message: `Too many key checks from this client. Retry after ${brake.retryAfterSeconds}s.`,
 						},
 						{ "retry-after": String(brake.retryAfterSeconds) }
 					);

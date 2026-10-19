@@ -124,6 +124,21 @@ section("H1. anonymous error text carries no environment detail");
 	check("server-side log keeps the detail (planted path present in the log only)", detailLogs.some((e) => String(e.detail).includes("planted-secret-dir")), JSON.stringify(detailLogs).slice(0, 300));
 	check("server-side log keeps the upstream detail", detailLogs.some((e) => String(e.detail).includes(PLANTED_HOST)));
 	check("server-side detail is bounded (<= 500 chars)", detailLogs.every((e) => String(e.detail).length <= 500));
+
+	// The bound at a value where it can bite (mutant H1d: short details hid it).
+	const { withPublicDisclaimer } = await import(path.join(DIST, "publicSurface.js"));
+	const long = "/var/task/" + "x".repeat(2000);
+	let seen = null;
+	const r = withPublicDisclaimer(
+		{ content: [], structuredContent: { disclaimer: "d", source_url: "http://10.0.0.5", error: { code: "INTERNAL_ERROR", message: long, retryable: false } }, isError: true },
+		(d) => (seen = d)
+	);
+	check("unit: a 2010-char cause is logged as exactly 500 chars", seen?.detail?.length === 500 && seen.detail === long.slice(0, 500), String(seen?.detail?.length));
+	check("unit: response message fixed, source_url empty", r.structuredContent.error.message === "Internal error" && r.structuredContent.source_url === "");
+	const odd = withPublicDisclaimer({ content: [], structuredContent: { disclaimer: "d", error: { code: "weird code!", message: "m" } }, isError: true });
+	check("unit: an unknown/malformed code becomes INTERNAL_ERROR, retryable false", odd.structuredContent.error.code === "INTERNAL_ERROR" && odd.structuredContent.error.retryable === false);
+	const okr = withPublicDisclaimer({ content: [], structuredContent: { disclaimer: "d", source_url: "https://api.commertize.com/api/news", error: null } });
+	check("unit: a success keeps its source_url (only errors are scrubbed)", okr.structuredContent.source_url === "https://api.commertize.com/api/news");
 }
 
 /* ------------------------------------------------------------------ */

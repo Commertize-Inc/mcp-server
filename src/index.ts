@@ -12,7 +12,11 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 import { config } from "./config.js";
 import { registerInquiryTool } from "./inquiryTool.js";
-import { envelopeSdkToolErrors, type PublicErrorDetail } from "./publicSurface.js";
+import {
+	envelopeSdkToolErrors,
+	withPublicDisclaimer,
+	type PublicErrorDetail,
+} from "./publicSurface.js";
 import { registerSandboxTools } from "./sandboxTools.js";
 import { registerScreenerTools } from "./screenerTools.js";
 import { applyToolMeta } from "./toolMeta.js";
@@ -58,6 +62,7 @@ export const createServer = (
 		);
 		applyToolMeta(pub);
 		registerTools(pub, "public", onToolResult);
+		registerPublicDataProductTools(pub, onToolResult);
 		envelopeSdkToolErrors(pub, onToolResult);
 		return pub;
 	}
@@ -116,6 +121,37 @@ export const createServer = (
 	/* Same pattern: off unless COMMERTIZE_MCP_ENABLE_DATA_PRODUCTS=1. */
 	registerDataProductTools(server);
 	return server;
+};
+
+/**
+ * The paid data products on the public surface (gate-checked inside
+ * registerDataProductTools). Each result gets the public disclaimer and the
+ * error-text scrub (withPublicDisclaimer), and is seen by the analytics
+ * observer, like the three free tools.
+ */
+const registerPublicDataProductTools = (
+	pub: McpServer,
+	onToolResult?: (tool: string, r: CallToolResult, d?: PublicErrorDetail) => void
+): void => {
+	const s = pub as unknown as { registerTool: (...a: unknown[]) => unknown };
+	const original = s.registerTool;
+	s.registerTool = (name: unknown, cfg: unknown, cb: unknown) =>
+		original.call(pub, name, cfg, async (...a: unknown[]) => {
+			let detail: PublicErrorDetail | undefined;
+			const run = cb as (...x: unknown[]) => unknown;
+			const r = withPublicDisclaimer((await run(...a)) as CallToolResult, (d) => (detail = d));
+			try {
+				onToolResult?.(String(name), r, detail);
+			} catch {
+				/* an observer never changes a result */
+			}
+			return r;
+		});
+	try {
+		registerDataProductTools(pub);
+	} finally {
+		s.registerTool = original;
+	}
 };
 
 const main = async (): Promise<void> => {

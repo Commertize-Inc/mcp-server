@@ -40,7 +40,12 @@ import { X402_TOOL_NAMES } from "./x402Tools.js";
 import { DATA_PRODUCT_TOOL_NAMES } from "./dataProductTools.js";
 import { HTTP_TOOL_ALLOWLIST } from "./httpAllowlist.js";
 import { INQUIRY_TOOL_NAME } from "./inquiryTool.js";
-import { PUBLIC_TOOL_SET, withPublicDisclaimer, type PublicErrorDetail } from "./publicSurface.js";
+import {
+	PUBLIC_TOOL_SET,
+	isPublicTool,
+	withPublicDisclaimer,
+	type PublicErrorDetail,
+} from "./publicSurface.js";
 import {
 	DISCLAIMER_BLOCK_TOOLS,
 	disclaimerBlockSchema,
@@ -609,7 +614,7 @@ export const registerTools = (
 				surface === "http"
 					? names.filter((n) => HTTP_TOOL_ALLOWLIST.has(n))
 					: surface === "public"
-						? names.filter((n) => PUBLIC_TOOL_SET.has(n))
+						? names.filter((n) => isPublicTool(n))
 						: [...names];
 			const writeTools = onSurface([
 				// `request_memo` reaches a person, but its upstream route is not
@@ -646,7 +651,9 @@ export const registerTools = (
 				// `x402_fetch` spends the caller's own funds on-chain, so a surface
 				// that registers it can transact. `writeTools` is already filtered
 				// to this surface and to the open gates.
-				can_transact: writeTools.includes("x402_fetch"),
+				// get_supplier_profile with a payment_signature spends too (front door).
+				can_transact:
+					writeTools.includes("x402_fetch") || writeTools.includes("get_supplier_profile"),
 				write_tools: writeTools,
 				tools: onSurface([
 					"list_offerings",

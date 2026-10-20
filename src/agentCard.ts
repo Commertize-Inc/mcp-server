@@ -21,6 +21,7 @@
  * certified tool titles. Nothing here is new prose.
  */
 
+import { config } from "./config.js";
 import type { NodeHandler } from "./httpServer.js";
 import { OPENAPI_DOCUMENT, SERVER_VERSION } from "./httpPublic.js";
 import { PUBLIC_ENDPOINT_URL, refusalBody } from "./refusals.js";
@@ -40,6 +41,12 @@ const SKILLS = [
 	{ id: "platform_info", name: "About Commertize", tags: ["reference"] },
 ] as const;
 
+/** Advertised only while the data-product gate is open (the tools exist). */
+const PAID_SKILLS = [
+	{ id: "data_products_catalog", name: "Commertize per-call data products", tags: ["data", "x402"] },
+	{ id: "get_supplier_profile", name: "Supplier screen status (dated)", tags: ["data", "x402", "paid"] },
+] as const;
+
 export const AGENT_CARD = Object.freeze({
 	name: OPENAPI_DOCUMENT.info.title,
 	description: OPENAPI_DOCUMENT.info.description,
@@ -51,7 +58,11 @@ export const AGENT_CARD = Object.freeze({
 	capabilities: { streaming: false, pushNotifications: false },
 	defaultInputModes: ["application/json"],
 	defaultOutputModes: ["application/json"],
-	skills: SKILLS.map((s) => ({ ...s, description: s.name })),
+	skills: [...SKILLS, ...(config.dataProductsDisabled ? [] : PAID_SKILLS)].map((s) => ({
+		...s,
+		tags: [...s.tags],
+		description: s.name,
+	})),
 });
 
 export const createAgentCardHandler = (o: { enabled: () => boolean }): NodeHandler => {

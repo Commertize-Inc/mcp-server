@@ -90,6 +90,40 @@ const cautionIfSigned = (
 ): { payment_note?: string } =>
 	signed && !("payment_settled" in settled) ? { payment_note: UNSETTLED_SIGNATURE_CAUTION } : {};
 
+/** A one-line fix the backend sent next to its refusal code, or null. */
+export const fixOf = (body: unknown): string | null => {
+	const f = (body as Record<string, unknown> | null)?.fix;
+	return typeof f === "string" && f.length > 0 && f.length <= 200 && !/[\r\n]/.test(f) ? f : null;
+};
+
+/**
+ * The backend 402's `sign-in-with-x` extension (x402 SIWX): how an agent
+ * proves its wallet to claim the free calls. Relayed field by field, each
+ * bounded; anything off-shape relays as null rather than as caller-visible
+ * garbage.
+ */
+export const relaySiwx = (body: unknown) => {
+	const ext = ((body as Record<string, unknown> | null)?.extensions ?? null) as Record<string, unknown> | null;
+	const x = (ext?.["sign-in-with-x"] ?? null) as Record<string, unknown> | null;
+	if (!x || typeof x !== "object") return null;
+	const info = (x.info ?? {}) as Record<string, unknown>;
+	const s300 = (v: unknown) => (typeof v === "string" && v.length <= 300 && !/[\r\n]/.test(v) ? v : null);
+	const chains = Array.isArray(x.supportedChains) ? x.supportedChains : [];
+	return {
+		header: x.header === "SIGN-IN-WITH-X" ? "SIGN-IN-WITH-X" : null,
+		domain: s300(info.domain),
+		uri: s300(info.uri),
+		version: s300(info.version),
+		nonce: s300(info.nonce),
+		issued_at: s300(info.issuedAt),
+		statement: s300(info.statement),
+		supported_chains: chains
+			.map((c) => c as Record<string, unknown>)
+			.filter((c) => typeof c.chainId === "string" && /^eip155:[0-9]{1,16}$/.test(c.chainId) && c.type === "eip191")
+			.map((c) => ({ chain_id: c.chainId as string, type: "eip191" as const })),
+	};
+};
+
 /** The first x402 v2 `accepts` entry of a 402 body, field names kept. */
 const relayAccepts = (body: unknown) => {
 	const b = (body ?? {}) as Record<string, unknown>;
@@ -128,6 +162,7 @@ export const registerDataProductTools = (server: McpServer): void => {
 							payment: z.string(),
 							price_atomic: z.string(),
 							free_calls_per_day: z.number(),
+							free_calls_per_wallet_per_day: z.number(),
 							cap_per_payer_per_day_atomic: z.string(),
 							cap_global_per_day_atomic: z.string(),
 							network: z.string(),
@@ -163,6 +198,7 @@ export const registerDataProductTools = (server: McpServer): void => {
 							payment: String(p.payment ?? ""),
 							price_atomic: String(p.price_atomic ?? ""),
 							free_calls_per_day: Number(p.free_calls_per_day ?? 0),
+							free_calls_per_wallet_per_day: Number(p.free_calls_per_wallet_per_day ?? 0),
 							cap_per_payer_per_day_atomic: String(
 								p.cap_per_payer_per_day_atomic ?? "",
 							),
@@ -197,6 +233,13 @@ export const registerDataProductTools = (server: McpServer): void => {
 					.optional()
 					.describe(
 						"Optional. An x402 v2 PAYMENT-SIGNATURE value you signed yourself; forwarded unchanged.",
+					),
+				wallet_proof: z
+					.string()
+					.max(4096)
+					.optional()
+					.describe(
+						"Optional. A SIGN-IN-WITH-X value you signed yourself, to use your wallet's free calls; forwarded unchanged.",
 					),
 			},
 			outputSchema: {
@@ -238,6 +281,21 @@ export const registerDataProductTools = (server: McpServer): void => {
 				/** The receipt's job_id when one was issued for that payment. */
 				receipt_id: z.string().nullable(),
 				payment_note: z.string().nullable(),
+				/** How to claim this wallet's free calls (the 402's sign-in-with-x). */
+				wallet_proof_challenge: z
+					.object({
+						header: z.string().nullable(),
+						domain: z.string().nullable(),
+						uri: z.string().nullable(),
+						version: z.string().nullable(),
+						nonce: z.string().nullable(),
+						issued_at: z.string().nullable(),
+						statement: z.string().nullable(),
+						supported_chains: z.array(z.object({ chain_id: z.string(), type: z.string() })),
+					})
+					.nullable(),
+				/** The backend's one-line next step for a refusal, relayed. */
+				fix: z.string().nullable(),
 			},
 			annotations: {
 				readOnlyHint: false,
@@ -245,7 +303,7 @@ export const registerDataProductTools = (server: McpServer): void => {
 				idempotentHint: true,
 			},
 		},
-		async ({ supplier_id, payment_signature }) => {
+		async ({ supplier_id, payment_signature, wallet_proof }) => {
 			const path = `/api/agent-data/suppliers/${encodeURIComponent(supplier_id)}/screen`;
 			const empty: {
 				status: string;
@@ -259,6 +317,8 @@ export const registerDataProductTools = (server: McpServer): void => {
 				payment_settled: boolean | null;
 				receipt_id: string | null;
 				payment_note: string | null;
+				wallet_proof_challenge: ReturnType<typeof relaySiwx>;
+				fix: string | null;
 			} = {
 				status: "unavailable",
 				free: null,
@@ -271,15 +331,17 @@ export const registerDataProductTools = (server: McpServer): void => {
 				payment_settled: null,
 				receipt_id: null,
 				payment_note: null,
+				wallet_proof_challenge: null,
+				fix: null,
 			};
 			try {
-				const res = await getRaw(
-					path,
-					payment_signature ? { "PAYMENT-SIGNATURE": payment_signature } : {},
-				);
+				const res = await getRaw(path, {
+					...(payment_signature ? { "PAYMENT-SIGNATURE": payment_signature } : {}),
+					...(wallet_proof ? { "SIGN-IN-WITH-X": wallet_proof } : {}),
+				});
 				const b = (res.body ?? {}) as Record<string, unknown>;
 				const out = (over: Partial<typeof empty> & { status: string }) =>
-					envelope(res.sourceUrl, { ...empty, ...over });
+					envelope(res.sourceUrl, { ...empty, fix: fixOf(b), ...over });
 				switch (res.status) {
 					case 200:
 						return out({
@@ -298,6 +360,7 @@ export const registerDataProductTools = (server: McpServer): void => {
 						return out({
 							status: "payment_required",
 							requirements: relayAccepts(b),
+							wallet_proof_challenge: relaySiwx(b),
 							buyer_terms: b.buyer_terms ?? null,
 							refusal_code: str(b.error),
 							...cautionIfSigned(!!payment_signature, {}),

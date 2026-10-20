@@ -106,6 +106,9 @@ process.env.COMMERTIZE_MCP_ENABLE_DATA_PRODUCTS = "1";
 const { createPublicHttpHandler, PUBLIC_PATH } = await import(path.join(DIST, "httpPublic.js"));
 const { FixedWindowLimiter } = await import(path.join(DIST, "httpRateLimit.js"));
 const { createServer } = await import(path.join(DIST, "index.js"));
+// This suite simulates the Vercel edge with x-vercel-forwarded-for; clientIpOf
+// trusts that header only when VERCEL is exactly "1" (gate R-1).
+process.env.VERCEL = "1";
 const handler = createPublicHttpHandler({
 	enabled: () => true,
 	ipLimiter: new FixedWindowLimiter(1000, 60_000),

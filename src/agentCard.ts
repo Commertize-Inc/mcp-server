@@ -23,7 +23,7 @@
 
 import type { NodeHandler } from "./httpServer.js";
 import { OPENAPI_DOCUMENT, SERVER_VERSION } from "./httpPublic.js";
-import { PUBLIC_ENDPOINT_URL, refusalBody } from "./refusals.js";
+import { D6_DISCLAIMER, PUBLIC_ENDPOINT_URL, refusalBody } from "./refusals.js";
 
 export const AGENT_CARD_PATHS: ReadonlySet<string> = new Set([
 	"/.well-known/agent-card.json",
@@ -52,6 +52,7 @@ export const AGENT_CARD = Object.freeze({
 	defaultInputModes: ["application/json"],
 	defaultOutputModes: ["application/json"],
 	skills: SKILLS.map((s) => ({ ...s, description: s.name })),
+	disclaimer: D6_DISCLAIMER,
 });
 
 export const createAgentCardHandler = (o: { enabled: () => boolean }): NodeHandler => {

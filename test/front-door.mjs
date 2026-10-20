@@ -58,6 +58,8 @@ const HINTS = ["readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHi
 const WRITES = new Set(["file_sponsor_inquiry", "request_memo", "sandbox_enroll", "sandbox_place_order", "x402_fetch"]);
 /** Tools whose call can be answered with an x402 challenge. */
 const PAID = new Set(["x402_fetch"]);
+/* AXIOM CERT_front_door_copy_2026-10-20 §1, pinned HERE byte for byte. */
+const D6 = "Commertize is not registered with or regulated by the SEC as a broker-dealer or investment adviser. This is not a recommendation or investment advice. Consult your own advisers.";
 const isFixLine = (f) => typeof f === "string" && f.length > 0 && f.length <= 200 && !/[\r\n]/.test(f);
 
 const listTools = async (surface) => {
@@ -224,6 +226,7 @@ section("A. agent card (A2A v1.0 well-known path + legacy alias)");
 		check(`${p}: no A2A core binding is claimed (this server speaks MCP)`, !["JSONRPC", "GRPC", "HTTP+JSON"].includes(iface.protocolBinding));
 		check(`${p}: the keyed /mcp is not advertised`, !JSON.stringify(c).includes('agents.commertize.com/mcp"'));
 		check(`${p}: version = served version`, c.version === SERVER_VERSION, String(c.version));
+		check(`${p}: carries the D6 disclaimer in its own field`, c.disclaimer === D6);
 		check(`${p}: skills = the public tools, each with id/name/description/tags`, JSON.stringify((c.skills ?? []).map((s) => s.id).sort()) === JSON.stringify(["get_article", "get_news", "platform_info"]) && (c.skills ?? []).every((s) => s.name && s.description && Array.isArray(s.tags)));
 	}
 	const post = await req("/.well-known/agent-card.json", { method: "POST" });
@@ -242,6 +245,8 @@ section("C. initialize and tools/list with NO key");
 	const l = await req(PUBLIC_PATH, { body: LIST, headers: J });
 	const tools = l.json?.result?.tools ?? [];
 	check("tools/list, no key: 200, tools present", l.status === 200 && tools.length > 0);
+	const call = await req(PUBLIC_PATH, { body: JSON.stringify({ jsonrpc: "2.0", id: 5, method: "tools/call", params: { name: "platform_info", arguments: {} } }), headers: J });
+	check("a public tool result carries D6 as sec_disclaimer (D-1 stays in disclaimer)", call.json?.result?.structuredContent?.sec_disclaimer === D6 && call.json?.result?.structuredContent?.disclaimer !== D6, JSON.stringify(call.json?.result?.structuredContent ?? {}).slice(0, 200));
 	check("tools/list carries annotations and pricing over HTTP", tools.every((t) => t.annotations?.readOnlyHint === true && t._meta?.[PRICING_KEY]?.model === "free"));
 }
 
@@ -264,11 +269,12 @@ section("D. every refusal is a code plus a one-line fix");
 	];
 	for (const [label, run, status, code] of cases) {
 		const r = await run();
-		check(`${label}: HTTP ${status}, error=${code}, one-line fix`, r.status === status && r.json?.error === code && isFixLine(r.json?.fix), `${r.status} ${JSON.stringify(r.json)}`);
+		check(`${label}: HTTP ${status}, error=${code}, one-line fix, D6 disclaimer`, r.status === status && r.json?.error === code && isFixLine(r.json?.fix) && r.json?.disclaimer === D6 && !r.json.fix.includes(D6), `${r.status} ${JSON.stringify(r.json)}`);
 	}
 	const k = await req("/mcp", { body: INIT, headers: J });
 	check("keyed 401 fix points at the no-key endpoint", typeof k.json?.fix === "string" && k.json.fix.includes(PUBLIC_URL));
 	check("keyed 401 keeps its existing message (nothing that parses it breaks)", typeof k.json?.message === "string" && k.json.message.length > 0);
+	check("verifier_unavailable fix is the AXIOM redline", (await tryImport("refusals.js")).REFUSAL_FIX?.verifier_unavailable === "The key check is unavailable. Retry later.");
 	check("keyed 401 keeps WWW-Authenticate", (k.headers.get("www-authenticate") ?? "").startsWith("Bearer"));
 
 	const t1 = await req("/tight", { body: INIT, headers: { ...J, "x-vercel-forwarded-for": "198.18.0.1" } });
@@ -288,7 +294,7 @@ section("D. every refusal is a code plus a one-line fix");
 			continue;
 		}
 		const e = r.json?.error ?? {};
-		check(`${label}: HTTP ${status}, JSON-RPC ${rpcCode}, data.error=${code}, one-line fix`, r.status === status && e.code === rpcCode && e.data?.error === code && isFixLine(e.data?.fix), `${r.status} ${JSON.stringify(r.json)}`);
+		check(`${label}: HTTP ${status}, JSON-RPC ${rpcCode}, data.error=${code}, one-line fix, data.disclaimer D6`, r.status === status && e.code === rpcCode && e.data?.error === code && isFixLine(e.data?.fix) && e.data?.disclaimer === D6, `${r.status} ${JSON.stringify(r.json)}`);
 	}
 	const leak = await req("/throw", { body: INIT, headers: J });
 	check("500 body carries no raw cause", !JSON.stringify(leak.json).includes("secret-path"));

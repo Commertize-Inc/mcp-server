@@ -59,10 +59,45 @@ section("1. toBucketKey: IPv6 collapses to /64, IPv4 passes through");
 }
 
 /* ------------------------------------------------------------------ */
-section("2. clientIpOf: header precedence, socket fallback, unknown");
+section("2a. clientIpOf OFF Vercel: forged edge headers are ignored (gate R-1)");
 /* ------------------------------------------------------------------ */
 {
 	const req = (headers = {}, remoteAddress) => ({ headers, socket: { remoteAddress } });
+	const FORGED = { "x-vercel-forwarded-for": "2001:db8:1:2::9", "x-real-ip": "198.51.100.99" };
+	// Unset, empty, and every near-miss of "1" must count as OFF.
+	for (const v of [undefined, "", "0", "true", "TRUE", "yes", " 1", "1 ", "01", "2"]) {
+		const label = v === undefined ? "unset" : JSON.stringify(v);
+		if (v === undefined) delete process.env.VERCEL;
+		else process.env.VERCEL = v;
+		check(
+			`VERCEL=${label}: both forged headers ignored, socket wins`,
+			clientIpOf(req(FORGED, "203.0.113.7")) === "203.0.113.7"
+		);
+		check(
+			`VERCEL=${label}: forged x-real-ip alone ignored`,
+			clientIpOf(req({ "x-real-ip": "198.51.100.99" }, "203.0.113.8")) === "203.0.113.8"
+		);
+		check(
+			`VERCEL=${label}: forged headers with no socket fall to 'unknown', never to the header`,
+			clientIpOf(req(FORGED, undefined)) === "unknown"
+		);
+	}
+}
+
+/* ------------------------------------------------------------------ */
+section("2b. clientIpOf ON Vercel (VERCEL=1): header precedence, socket fallback, unknown");
+/* ------------------------------------------------------------------ */
+process.env.VERCEL = "1";
+{
+	const req = (headers = {}, remoteAddress) => ({ headers, socket: { remoteAddress } });
+	check(
+		"x-vercel-forwarded-for beats the socket",
+		clientIpOf(req({ "x-vercel-forwarded-for": "198.51.100.5" }, "203.0.113.7")) === "198.51.100.5"
+	);
+	check(
+		"x-real-ip beats the socket",
+		clientIpOf(req({ "x-real-ip": "198.51.100.6" }, "203.0.113.7")) === "198.51.100.6"
+	);
 	check(
 		"x-vercel-forwarded-for (first hop) wins and is bucketed",
 		clientIpOf(req({ "x-vercel-forwarded-for": "2001:db8:1:2::9, 198.51.100.1", "x-real-ip": "203.0.113.1" })) ===
@@ -151,6 +186,20 @@ try {
 	check("IPv4 is unchanged: a different address is a different bucket", v4.status === 401, String(v4.status));
 	const v4again = await post(201, "198.51.100.20");
 	check("IPv4 is unchanged: the same address is braked", v4again.status === 429, String(v4again.status));
+
+	// Gate R-1 through the real handler: OFF Vercel, rotating a forged
+	// x-vercel-forwarded-for must NOT buy fresh buckets; every request is the
+	// socket (127.0.0.1) and the (PER_IP+1)th is braked.
+	delete process.env.VERCEL;
+	verifyLimiter.reset();
+	verifyCalls = 0;
+	for (let i = 1; i <= PER_IP; i += 1) await post(300 + i, `198.51.100.${30 + i}`);
+	const forged = await post(400, "198.51.100.99");
+	check(
+		"off Vercel: rotating forged edge headers is braked on the socket bucket (429)",
+		forged.status === 429 && verifyCalls === PER_IP,
+		`${forged.status} / ${verifyCalls}`
+	);
 } finally {
 	await new Promise((r) => server.close(r));
 }

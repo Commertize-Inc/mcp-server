@@ -48,6 +48,7 @@ const SUITES = [
 	["public hardening, pre-flag (stub upstream)", "public-hardening.mjs", { live: false }],
 	["front door: agent card, tool meta, coded refusals (offline)", "front-door.mjs", { live: false }],
 	["front door: key-free paid path on /mcp/public (stub upstream)", "front-door-paid.mjs", { live: false }],
+	["relay identity: per-agent signed bucket (stub upstream)", "relay-identity.mjs", { live: false }],
 	["language", "language-check.mjs", { live: false }],
 	["listing readiness (offline)", "listing-readiness.mjs", { live: false }],
 	["wording guard (AXIOM 10-16)", "wording-guard.mjs", { live: false }],

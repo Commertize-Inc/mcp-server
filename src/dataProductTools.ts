@@ -27,6 +27,7 @@ import { DISCLAIMER } from "./disclaimer.js";
 import { envelopeShape } from "./schemas.js";
 import { fail, toResult } from "./envelope.js";
 import { getRaw } from "./http.js";
+import { relayIdentityHeaders } from "./relayIdentity.js";
 
 export const DATA_PRODUCT_TOOL_NAMES = [
 	"data_products_catalog",
@@ -336,6 +337,8 @@ export const registerDataProductTools = (server: McpServer): void => {
 			};
 			try {
 				const res = await getRaw(path, {
+					// {} unless the relay flag + secret are set (relayIdentity.ts).
+					...relayIdentityHeaders(`p4:${supplier_id}`),
 					...(payment_signature ? { "PAYMENT-SIGNATURE": payment_signature } : {}),
 					...(wallet_proof ? { "SIGN-IN-WITH-X": wallet_proof } : {}),
 				});

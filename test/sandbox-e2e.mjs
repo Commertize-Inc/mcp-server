@@ -412,4 +412,4 @@ section("if the venue stops sending its designation, we relay the absence");
 }
 
 server.close();
-summary("sandbox e2e");
+process.exit(summary("sandbox e2e") === 0 ? 0 : 1);

@@ -82,6 +82,9 @@ const server = createServer((req, res) => {
 		if (mode === "paid_junk_job") return json(503, { error: "output_drift", payment: { ...PAID, job_id: "../x" } });
 		if (mode === "paid_false") return json(409, { error: "input_mismatch", payment: { ...PAID, settled: false } });
 		if (mode === "down") return json(503, { error: "unavailable" });
+		// DP-FLAG-23: the backend refused a signed payment without settling it.
+		if (mode === "sig_402") return json(402, { x402Version: 2, error: "payment_failed", accepts: [] });
+		if (mode === "hangup") return req.socket.destroy();
 		if (!sig)
 			return json(402, {
 				x402Version: 2,
@@ -103,6 +106,9 @@ const ON = {
 	COMMERTIZE_MCP_DISABLE_DATA_PRODUCTS: "",
 };
 const NAMES = ["data_products_catalog", "get_supplier_profile"];
+// Pinned as a literal, not imported, so a changed caution string fails here.
+const CAUTION =
+	"No result was delivered for this call, and the payment authorization you signed may still settle until its expiry. Do not re-sign with a new nonce; to retry, resend the same payment_signature.";
 
 resetCounters();
 
@@ -250,10 +256,36 @@ section("get_supplier_profile relays every answer as itself");
 			nr.receipt_id === null &&
 			nr.payment_note === `Payment settled (transaction ${TXP}, job job-1). This call was not charged again.`,
 	);
-	for (const m of ["paid_junk_tx", "paid_junk_job", "paid_false"]) {
+	// A malformed block makes no SETTLEMENT claim. On the 503s the signed
+	// authorization is still an unknown, so the DP-FLAG-23 caution applies.
+	for (const [m, note] of [
+		["paid_junk_tx", CAUTION],
+		["paid_junk_job", CAUTION],
+		["paid_false", null],
+	]) {
 		mode = m;
 		const { payload: pk } = await call(client, "get_supplier_profile", { supplier_id: "sup-1", payment_signature: SIG });
-		check(`${m}: a malformed payment block makes no claim`, pk.payment_settled === null && pk.transaction === null && pk.payment_note === null);
+		check(`${m}: a malformed payment block makes no settlement claim`, pk.payment_settled === null && pk.transaction === null && pk.payment_note === note);
+	}
+
+	// DP-FLAG-23 (independent M-2): a 402/503/transport failure answered to a
+	// SIGNED request never reads as "nothing charged".
+	for (const [m, st] of [
+		["sig_402", "payment_required"],
+		["down", "unavailable"],
+		["drift", "unavailable"],
+		["hangup", "unavailable"],
+	]) {
+		mode = m;
+		const { payload: sp } = await call(client, "get_supplier_profile", { supplier_id: "sup-1", payment_signature: SIG });
+		check(`${m} after a signature: ${st} with the may-still-settle caution`, sp.status === st && sp.payment_note === CAUTION && sp.payment_settled === null);
+		check(`${m} after a signature: never "nothing charged"`, !/nothing (was )?charged|not charged/i.test(JSON.stringify(sp)));
+	}
+	// Without a signature there is nothing that could settle: no caution.
+	for (const m of ["sig_402", "down", "hangup"]) {
+		mode = m;
+		const { payload: un } = await call(client, "get_supplier_profile", { supplier_id: "sup-1" });
+		check(`${m} unsigned: no caution`, un.payment_note === null);
 	}
 	await client.close();
 }
@@ -271,4 +303,4 @@ section("the supplier id cannot steer the path");
 }
 
 server.close();
-summary("data products e2e");
+process.exit(summary("data products e2e") === 0 ? 0 : 1);

@@ -23,12 +23,15 @@ import { spawn } from "node:child_process";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { suiteFailure } from "./suite-verdict.mjs";
+
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 /** Only the exact string "1", the same fail-closed parse as the tool gates. */
 const LIVE = process.env.COMMERTIZE_MCP_LIVE_TESTS === "1";
 
 const SUITES = [
+	["runner verdict (offline)", "runner-verdict.mjs", { live: false }],
 	["degradation (offline)", "api-down.mjs", { live: false }],
 	["live stdio e2e (network)", "stdio-e2e.mjs", { live: true }],
 	["screener unit (offline)", "screener-unit.mjs", { live: false }],
@@ -43,12 +46,19 @@ const SUITES = [
 	["language", "language-check.mjs", { live: false }],
 ];
 
+// DP-FLAG-21: stdout is teed AND kept, so the verdict reads what the suite
+// printed, not only its exit code (suite-verdict.mjs).
 const run = (file) =>
 	new Promise((resolve) => {
 		const child = spawn(process.execPath, [path.join(HERE, file)], {
-			stdio: ["ignore", "inherit", "inherit"],
+			stdio: ["ignore", "pipe", "inherit"],
 		});
-		child.on("exit", (code) => resolve(code ?? 1));
+		let out = "";
+		child.stdout.on("data", (d) => {
+			out += d;
+			process.stdout.write(d);
+		});
+		child.on("close", (code) => resolve(suiteFailure(code, out)));
 	});
 
 let failed = 0;
@@ -65,9 +75,12 @@ for (const [label, file, opts] of SUITES) {
 		continue;
 	}
 	console.log(`\n=== ${label} =====================================`);
-	const code = await run(file);
+	const why = await run(file);
 	ran += 1;
-	if (code !== 0) failed += 1;
+	if (why !== null) {
+		failed += 1;
+		console.log(`SUITE FAILED: ${label} (${why})`);
+	}
 }
 
 // The skip count is on the SAME line as the verdict, so nobody reads "ALL

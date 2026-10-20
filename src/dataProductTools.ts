@@ -73,6 +73,23 @@ export const settledRefusal = (b: Record<string, unknown>) => {
 	};
 };
 
+/**
+ * DP-FLAG-23 (independent M-2 on f555e93b): a 402 or a 503 answered to a
+ * request that CARRIED a payment_signature does not prove nothing was
+ * charged. The signed authorization stays settleable by anyone holding it
+ * until its validBefore, and the backend does not relay validBefore, so the
+ * note is fixed copy (AXIOM review with DP-FLAG-9 before flag-on). Never
+ * added when the backend reported a settlement (settledRefusal wins).
+ */
+export const UNSETTLED_SIGNATURE_CAUTION =
+	"No result was delivered for this call, and the payment authorization you signed may still settle until its expiry. Do not re-sign with a new nonce; to retry, resend the same payment_signature.";
+
+const cautionIfSigned = (
+	signed: boolean,
+	settled: ReturnType<typeof settledRefusal>,
+): { payment_note?: string } =>
+	signed && !("payment_settled" in settled) ? { payment_note: UNSETTLED_SIGNATURE_CAUTION } : {};
+
 /** The first x402 v2 `accepts` entry of a 402 body, field names kept. */
 const relayAccepts = (body: unknown) => {
 	const b = (body ?? {}) as Record<string, unknown>;
@@ -283,6 +300,7 @@ export const registerDataProductTools = (server: McpServer): void => {
 							requirements: relayAccepts(b),
 							buyer_terms: b.buyer_terms ?? null,
 							refusal_code: str(b.error),
+							...cautionIfSigned(!!payment_signature, {}),
 						});
 					case 403:
 						return out({ status: "refused", refusal_code: str(b.error), ...settledRefusal(b) });
@@ -304,10 +322,23 @@ export const registerDataProductTools = (server: McpServer): void => {
 					default:
 						// The backend's code is relayed (e.g. output_drift: a paid
 						// replay that no longer matches its receipt, never re-charged).
-						return out({ status: "unavailable", refusal_code: str(b.error), ...settledRefusal(b) });
+						{
+							const settled = settledRefusal(b);
+							return out({
+								status: "unavailable",
+								refusal_code: str(b.error),
+								...cautionIfSigned(!!payment_signature, settled),
+								...settled,
+							});
+						}
 				}
 			} catch (err) {
-				return fail(err, `${config.apiBaseUrl}${path}`, empty);
+				// A transport failure after the signature left this process is
+				// the same unknown: the backend may have settled it.
+				return fail(err, `${config.apiBaseUrl}${path}`, {
+					...empty,
+					...cautionIfSigned(!!payment_signature, {}),
+				});
 			}
 		},
 	);

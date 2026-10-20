@@ -65,4 +65,8 @@ hits.length = before;
 if (!caught) { console.log("FAIL guard did not catch the planted control string"); failed += 1; }
 for (const h of hits) { console.log(`FAIL ${h}`); failed += 1; }
 console.log(failed === 0 ? "PASS wording guard: no barred words in user-facing strings (control caught)" : `${failed} wording-guard failure(s)`);
+// The run-all verdict (suite-verdict.mjs, from #12) needs a `x/y checks passed`
+// line: two checks, "the control is caught" and "no barred word anywhere".
+const checksOk = (caught ? 1 : 0) + (hits.length === 0 ? 1 : 0);
+console.log(`wording guard: ${checksOk}/2 checks passed${checksOk === 2 ? "" : ` (${2 - checksOk} FAILED)`}`);
 process.exit(failed === 0 ? 0 : 1);

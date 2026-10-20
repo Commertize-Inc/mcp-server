@@ -23,18 +23,22 @@ import { spawn } from "node:child_process";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { suiteFailure } from "./suite-verdict.mjs";
+
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 /** Only the exact string "1", the same fail-closed parse as the tool gates. */
 const LIVE = process.env.COMMERTIZE_MCP_LIVE_TESTS === "1";
 
 const SUITES = [
+	["runner verdict (offline)", "runner-verdict.mjs", { live: false }],
 	["degradation (offline)", "api-down.mjs", { live: false }],
 	["live stdio e2e (network)", "stdio-e2e.mjs", { live: true }],
 	["screener unit (offline)", "screener-unit.mjs", { live: false }],
 	["screener e2e (stub upstream)", "screener-e2e.mjs", { live: false }],
 	["sandbox e2e (stub upstream)", "sandbox-e2e.mjs", { live: false }],
 	["x402 e2e (stub upstream)", "x402-e2e.mjs", { live: false }],
+	["data products e2e (stub upstream)", "data-products-e2e.mjs", { live: false }],
 	["disclosure e2e (stub upstream)", "disclosure-e2e.mjs", { live: false }],
 	["deployment gates (offline)", "gates-e2e.mjs", { live: false }],
 	["streamable http e2e (stub upstream)", "http-e2e.mjs", { live: false }],
@@ -43,18 +47,27 @@ const SUITES = [
 	["public endpoint analytics (stub upstream)", "analytics-e2e.mjs", { live: false }],
 	["public hardening, pre-flag (stub upstream)", "public-hardening.mjs", { live: false }],
 	["front door: agent card, tool meta, coded refusals (offline)", "front-door.mjs", { live: false }],
+	["front door: key-free paid path on /mcp/public (stub upstream)", "front-door-paid.mjs", { live: false }],
+	["relay identity: per-agent signed bucket (stub upstream)", "relay-identity.mjs", { live: false }],
 	["language", "language-check.mjs", { live: false }],
 	["listing readiness (offline)", "listing-readiness.mjs", { live: false }],
 	["wording guard (AXIOM 10-16)", "wording-guard.mjs", { live: false }],
 	["readme directory profile (offline)", "readme-profile.mjs", { live: false }],
 ];
 
+// DP-FLAG-21: stdout is teed AND kept, so the verdict reads what the suite
+// printed, not only its exit code (suite-verdict.mjs).
 const run = (file) =>
 	new Promise((resolve) => {
 		const child = spawn(process.execPath, [path.join(HERE, file)], {
-			stdio: ["ignore", "inherit", "inherit"],
+			stdio: ["ignore", "pipe", "inherit"],
 		});
-		child.on("exit", (code) => resolve(code ?? 1));
+		let out = "";
+		child.stdout.on("data", (d) => {
+			out += d;
+			process.stdout.write(d);
+		});
+		child.on("close", (code) => resolve(suiteFailure(code, out)));
 	});
 
 let failed = 0;
@@ -71,9 +84,12 @@ for (const [label, file, opts] of SUITES) {
 		continue;
 	}
 	console.log(`\n=== ${label} =====================================`);
-	const code = await run(file);
+	const why = await run(file);
 	ran += 1;
-	if (code !== 0) failed += 1;
+	if (why !== null) {
+		failed += 1;
+		console.log(`SUITE FAILED: ${label} (${why})`);
+	}
 }
 
 // The skip count is on the SAME line as the verdict, so nobody reads "ALL

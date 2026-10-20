@@ -102,6 +102,10 @@ export const TOOL_META: Readonly<Record<string, ToolMetaRow>> = Object.freeze({
 	// Not idempotent: a NEW signed authorization is a new payment.
 	x402_fetch: { hints: WRITE_APPEND, pricing: X402(false) },
 	x402_receipt: { hints: READ_UPSTREAM, pricing: FREE },
+	// per-call data products (public while their gate is open)
+	data_products_catalog: { hints: READ_UPSTREAM, pricing: FREE },
+	// Idempotent: resending the SAME payment_signature replays one delivery.
+	get_supplier_profile: { hints: { ...WRITE_APPEND, idempotentHint: true }, pricing: X402(true) },
 });
 
 export class ToolMetaError extends Error {}

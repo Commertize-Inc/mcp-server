@@ -100,6 +100,17 @@ export const config = {
 		process.env.COMMERTIZE_MCP_ENABLE_X402 !== "1",
 
 	/**
+	 * Gate for the per-call data product tools (`data_products_catalog`,
+	 * `get_supplier_profile`). Same parse. The backend surface
+	 * (/api/agent-data) 404s unless its own two flags are on, and the
+	 * user-facing labels await AXIOM certification, so by default these
+	 * tools are not registered.
+	 */
+	dataProductsDisabled:
+		process.env.COMMERTIZE_MCP_DISABLE_DATA_PRODUCTS === "1" ||
+		process.env.COMMERTIZE_MCP_ENABLE_DATA_PRODUCTS !== "1",
+
+	/**
 	 * Gate for `request_memo`, the server's only write.
 	 *
 	 * NOT a policy gate like the offerings one — a DEPLOYMENT gate. The route

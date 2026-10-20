@@ -32,6 +32,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { protocolVersionOf, srcOf, uaProductOf } from "./analytics.js";
 import type { FixedWindowLimiter } from "./httpRateLimit.js";
 import { clientIpOf, type HttpLogEvent, type NodeHandler } from "./httpServer.js";
+import { runAsRelayCaller } from "./relayIdentity.js";
 import {
 	clientNameOf,
 	clientVersionOf,
@@ -243,7 +244,10 @@ export const createPublicHttpHandler = (o: PublicHandlerOptions): NodeHandler =>
 				server.close().catch(() => {});
 			});
 			await server.connect(transport);
-			await transport.handleRequest(req, res, parsed);
+			// The caller's bucket rides in async scope so a backend call made
+			// for THIS request can carry its signed relay identity
+			// (relayIdentity.ts). Never logged, never sent unsigned.
+			await runAsRelayCaller(clientIpOf(req), () => transport.handleRequest(req, res, parsed));
 			outcome = "ok";
 		} catch (err) {
 			outcome = "error";

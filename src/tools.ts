@@ -37,9 +37,15 @@ import {
 } from "./sandboxTools.js";
 import { SCREENER_TOOL_NAMES } from "./screenerTools.js";
 import { X402_TOOL_NAMES } from "./x402Tools.js";
+import { DATA_PRODUCT_TOOL_NAMES } from "./dataProductTools.js";
 import { HTTP_TOOL_ALLOWLIST } from "./httpAllowlist.js";
 import { INQUIRY_TOOL_NAME } from "./inquiryTool.js";
-import { PUBLIC_TOOL_SET, withPublicDisclaimer, type PublicErrorDetail } from "./publicSurface.js";
+import {
+	PUBLIC_TOOL_SET,
+	isPublicTool,
+	withPublicDisclaimer,
+	type PublicErrorDetail,
+} from "./publicSurface.js";
 import {
 	DISCLAIMER_BLOCK_TOOLS,
 	disclaimerBlockSchema,
@@ -608,7 +614,7 @@ export const registerTools = (
 				surface === "http"
 					? names.filter((n) => HTTP_TOOL_ALLOWLIST.has(n))
 					: surface === "public"
-						? names.filter((n) => PUBLIC_TOOL_SET.has(n))
+						? names.filter((n) => isPublicTool(n))
 						: [...names];
 			const writeTools = onSurface([
 				// `request_memo` reaches a person, but its upstream route is not
@@ -627,6 +633,9 @@ export const registerTools = (
 				// it spends the caller's own money on-chain — which is the fact a
 				// client deciding whether to ask first actually needs.
 				...(config.x402Disabled ? [] : ["x402_fetch"]),
+				// With a payment_signature it spends the caller's own money, the
+				// same fact as x402_fetch.
+				...(config.dataProductsDisabled ? [] : ["get_supplier_profile"]),
 			]);
 			const capabilities = {
 				// Derived, never asserted: with every write gate closed this server
@@ -642,7 +651,9 @@ export const registerTools = (
 				// `x402_fetch` spends the caller's own funds on-chain, so a surface
 				// that registers it can transact. `writeTools` is already filtered
 				// to this surface and to the open gates.
-				can_transact: writeTools.includes("x402_fetch"),
+				// get_supplier_profile with a payment_signature spends too (front door).
+				can_transact:
+					writeTools.includes("x402_fetch") || writeTools.includes("get_supplier_profile"),
 				write_tools: writeTools,
 				tools: onSurface([
 					"list_offerings",
@@ -666,6 +677,7 @@ export const registerTools = (
 					// `registerSandboxTools` returns on. One predicate, two readers.
 					...(config.sandboxDisabled ? [] : SANDBOX_TOOL_NAMES),
 					...(config.x402Disabled ? [] : X402_TOOL_NAMES),
+					...(config.dataProductsDisabled ? [] : DATA_PRODUCT_TOOL_NAMES),
 				]),
 			};
 			const file = path.join(CONTENT_DIR, "platform-info.md");

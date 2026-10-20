@@ -22,6 +22,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
+import { config } from "./config.js";
 import { DISCLAIMER, DISCLAIMER_ID } from "./disclaimer.js";
 import { withDisclaimerBlock } from "./disclaimerBlock.js";
 import { D6_DISCLAIMER } from "./refusals.js";
@@ -30,8 +31,19 @@ export const PUBLIC_TOOL_NAMES = ["get_news", "get_article", "platform_info"] as
 
 export const PUBLIC_TOOL_SET: ReadonlySet<string> = new Set<string>(PUBLIC_TOOL_NAMES);
 
+/**
+ * The PAID per-call data products (dataProductTools.ts), public too, but ONLY
+ * while their own gate is open (COMMERTIZE_MCP_ENABLE_DATA_PRODUCTS=1). A
+ * stranger agent needs no key for them: a call is free (the backend's per-
+ * wallet quota) or it answers with the x402 payment requirements, never 401.
+ * Closed gate = they are not registered and a call naming one is 403.
+ */
+export const PUBLIC_PAID_TOOL_NAMES = ["data_products_catalog", "get_supplier_profile"] as const;
+const PUBLIC_PAID_SET: ReadonlySet<string> = new Set<string>(PUBLIC_PAID_TOOL_NAMES);
+
 export const isPublicTool = (name: unknown): name is string =>
-	typeof name === "string" && PUBLIC_TOOL_SET.has(name);
+	typeof name === "string" &&
+	(PUBLIC_TOOL_SET.has(name) || (!config.dataProductsDisabled && PUBLIC_PAID_SET.has(name)));
 
 /** D-1, the same constant as the server-wide DISCLAIMER (AXIOM §3). */
 export const PUBLIC_DISCLAIMER = DISCLAIMER;

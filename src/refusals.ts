@@ -18,10 +18,10 @@
 
 /**
  * D6 (AXIOM RULING_sec_ui_statement_mcp_2026-10-20; text CERTIFIED in
- * CERT_front_door_copy_2026-10-20 §1, byte for byte). Its own `disclaimer`
- * field on the agent card and every refusal body; `error.data.disclaimer` on
- * JSON-RPC errors; `sec_disclaimer` on tool results (whose `disclaimer` field
- * already carries D-1). Never edited, shortened or merged into `fix`.
+ * CERT_front_door_copy_2026-10-20 §1, byte for byte). One field name
+ * everywhere (cert §8): `sec_disclaimer` on the agent card, every refusal
+ * body, JSON-RPC `error.data`, and tool results (whose `disclaimer` field
+ * keeps D-1). Never in `disclaimer`, never edited or merged into `fix`.
  */
 export const D6_DISCLAIMER =
 	"Commertize is not registered with or regulated by the SEC as a broker-dealer or investment adviser. This is not a recommendation or investment advice. Consult your own advisers.";
@@ -55,7 +55,7 @@ export type RefusalCode = keyof typeof REFUSAL_FIX;
 export const refusalBody = (code: RefusalCode, extra: Record<string, unknown> = {}) => ({
 	error: code,
 	fix: REFUSAL_FIX[code],
-	disclaimer: D6_DISCLAIMER,
+	sec_disclaimer: D6_DISCLAIMER,
 	...extra,
 });
 
@@ -79,14 +79,14 @@ export const withFix = (status: number, body: unknown): unknown => {
 	if (status < 400 || !body || typeof body !== "object") return body;
 	const b = body as Record<string, unknown>;
 	if ("fix" in b) return body;
-	if (isRefusalCode(b.error)) return { ...b, fix: REFUSAL_FIX[b.error], disclaimer: D6_DISCLAIMER };
+	if (isRefusalCode(b.error)) return { ...b, fix: REFUSAL_FIX[b.error], sec_disclaimer: D6_DISCLAIMER };
 	const e = b.error as { code?: unknown; data?: unknown } | undefined;
 	if (e && typeof e === "object" && e.data === undefined && typeof e.code === "number") {
 		const code = RPC_CODE_REFUSAL[e.code];
 		if (code)
 			return {
 				...b,
-				error: { ...e, data: { error: code, fix: REFUSAL_FIX[code], disclaimer: D6_DISCLAIMER } },
+				error: { ...e, data: { error: code, fix: REFUSAL_FIX[code], sec_disclaimer: D6_DISCLAIMER } },
 			};
 	}
 	return body;
@@ -99,6 +99,6 @@ export const rpcRefusal = (id: unknown, rpcCode: number, message: string, code: 
 	error: {
 		code: rpcCode,
 		message,
-		data: { error: code, fix: REFUSAL_FIX[code], disclaimer: D6_DISCLAIMER },
+		data: { error: code, fix: REFUSAL_FIX[code], sec_disclaimer: D6_DISCLAIMER },
 	},
 });

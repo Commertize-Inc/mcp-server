@@ -312,7 +312,7 @@ section("5. per-IP ceiling");
 	// front door (2026-10-20): the code is unchanged; a one-line `fix` joins it, and nothing else.
 	const overBody = await over.json();
 	// AXIOM CERT 10-20 §1: the D6 `disclaimer` is the third key.
-	check("429 body is a machine code, a one-line fix and the D6 disclaimer, nothing else", JSON.stringify(Object.keys(overBody)) === JSON.stringify(["error", "fix", "disclaimer"]) && overBody.error === "rate_limited" && typeof overBody.fix === "string" && !/\n/.test(overBody.fix), JSON.stringify(overBody));
+	check("429 body is a machine code, a one-line fix and the D6 disclaimer, nothing else", JSON.stringify(Object.keys(overBody)) === JSON.stringify(["error", "fix", "sec_disclaimer"]) && overBody.error === "rate_limited" && typeof overBody.fix === "string" && !/\n/.test(overBody.fix), JSON.stringify(overBody));
 	const other = await post(LIST, { ip: "203.0.113.51" });
 	check("another IP has its own bucket", other.status === 200);
 	const v6a = await post(LIST, { ip: "2001:db8:1:2:aaaa::1" });

@@ -226,7 +226,7 @@ section("A. agent card (A2A v1.0 well-known path + legacy alias)");
 		check(`${p}: no A2A core binding is claimed (this server speaks MCP)`, !["JSONRPC", "GRPC", "HTTP+JSON"].includes(iface.protocolBinding));
 		check(`${p}: the keyed /mcp is not advertised`, !JSON.stringify(c).includes('agents.commertize.com/mcp"'));
 		check(`${p}: version = served version`, c.version === SERVER_VERSION, String(c.version));
-		check(`${p}: carries the D6 disclaimer in its own field`, c.disclaimer === D6);
+		check(`${p}: carries the D6 disclaimer in its own field`, c.sec_disclaimer === D6 && c.disclaimer === undefined);
 		check(`${p}: skills = the public tools, each with id/name/description/tags`, JSON.stringify((c.skills ?? []).map((s) => s.id).sort()) === JSON.stringify(["get_article", "get_news", "platform_info"]) && (c.skills ?? []).every((s) => s.name && s.description && Array.isArray(s.tags)));
 	}
 	const post = await req("/.well-known/agent-card.json", { method: "POST" });
@@ -269,7 +269,7 @@ section("D. every refusal is a code plus a one-line fix");
 	];
 	for (const [label, run, status, code] of cases) {
 		const r = await run();
-		check(`${label}: HTTP ${status}, error=${code}, one-line fix, D6 disclaimer`, r.status === status && r.json?.error === code && isFixLine(r.json?.fix) && r.json?.disclaimer === D6 && !r.json.fix.includes(D6), `${r.status} ${JSON.stringify(r.json)}`);
+		check(`${label}: HTTP ${status}, error=${code}, one-line fix, D6 disclaimer`, r.status === status && r.json?.error === code && isFixLine(r.json?.fix) && r.json?.sec_disclaimer === D6 && r.json?.disclaimer === undefined && !r.json.fix.includes(D6), `${r.status} ${JSON.stringify(r.json)}`);
 	}
 	const k = await req("/mcp", { body: INIT, headers: J });
 	check("keyed 401 fix points at the no-key endpoint", typeof k.json?.fix === "string" && k.json.fix.includes(PUBLIC_URL));
@@ -294,7 +294,7 @@ section("D. every refusal is a code plus a one-line fix");
 			continue;
 		}
 		const e = r.json?.error ?? {};
-		check(`${label}: HTTP ${status}, JSON-RPC ${rpcCode}, data.error=${code}, one-line fix, data.disclaimer D6`, r.status === status && e.code === rpcCode && e.data?.error === code && isFixLine(e.data?.fix) && e.data?.disclaimer === D6, `${r.status} ${JSON.stringify(r.json)}`);
+		check(`${label}: HTTP ${status}, JSON-RPC ${rpcCode}, data.error=${code}, one-line fix, data.disclaimer D6`, r.status === status && e.code === rpcCode && e.data?.error === code && isFixLine(e.data?.fix) && e.data?.sec_disclaimer === D6 && e.data?.disclaimer === undefined, `${r.status} ${JSON.stringify(r.json)}`);
 	}
 	const leak = await req("/throw", { body: INIT, headers: J });
 	check("500 body carries no raw cause", !JSON.stringify(leak.json).includes("secret-path"));

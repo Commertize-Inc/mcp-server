@@ -63,7 +63,7 @@ export const AGENT_CARD = Object.freeze({
 		tags: [...s.tags],
 		description: s.name,
 	})),
-	disclaimer: D6_DISCLAIMER,
+	sec_disclaimer: D6_DISCLAIMER,
 });
 
 export const createAgentCardHandler = (o: { enabled: () => boolean }): NodeHandler => {

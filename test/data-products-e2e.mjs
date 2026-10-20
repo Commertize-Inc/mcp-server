@@ -71,6 +71,16 @@ const server = createServer((req, res) => {
 		if (mode === "pending_notx") return json(202, { status: "pending", retry: "resend the same request" });
 		if (mode === "pending_junk") return json(202, { status: "pending", transaction: "see etherscan <a>" });
 		if (mode === "drift") return json(503, { error: "output_drift" });
+		// DP-FLAG-18: refusals for an authorization that already settled.
+		const PAID = { settled: true, transaction: "0x" + "ab".repeat(32), job_id: "job-1", receipt_issued: true };
+		if (mode === "paid_refused") return json(403, { error: "COMPLIANCE_REVIEW", payment: PAID });
+		if (mode === "paid_mismatch") return json(409, { error: "input_mismatch", payment: PAID });
+		if (mode === "paid_drift") return json(503, { error: "output_drift", payment: PAID });
+		if (mode === "paid_noreceipt")
+			return json(409, { error: "input_mismatch", payment: { ...PAID, receipt_issued: false } });
+		if (mode === "paid_junk_tx") return json(503, { error: "output_drift", payment: { ...PAID, transaction: "see <a>" } });
+		if (mode === "paid_junk_job") return json(503, { error: "output_drift", payment: { ...PAID, job_id: "../x" } });
+		if (mode === "paid_false") return json(409, { error: "input_mismatch", payment: { ...PAID, settled: false } });
 		if (mode === "down") return json(503, { error: "unavailable" });
 		if (!sig)
 			return json(402, {
@@ -209,6 +219,42 @@ section("get_supplier_profile relays every answer as itself");
 	mode = "down";
 	const { payload: dn } = await call(client, "get_supplier_profile", { supplier_id: "sup-1" });
 	check("a plain 503 is unavailable", dn.status === "unavailable" && dn.refusal_code === "unavailable");
+	check("a refusal without a payment block makes no payment claim", dn.payment_settled === null && dn.payment_note === null);
+
+	// DP-FLAG-18: after a settled payment, never "nothing charged".
+	const TXP = "0x" + "ab".repeat(32);
+	const NOTE = "Payment settled, receipt job-1. This call was not charged again.";
+	for (const [m, st, code] of [
+		["paid_refused", "refused", "COMPLIANCE_REVIEW"],
+		["paid_mismatch", "refused", "input_mismatch"],
+		["paid_drift", "unavailable", "output_drift"],
+	]) {
+		mode = m;
+		const { payload: pp } = await call(client, "get_supplier_profile", { supplier_id: "sup-1", payment_signature: SIG });
+		check(
+			`${m}: settled payment relayed (${st}/${code}, receipt, not charged again)`,
+			pp.status === st &&
+				pp.refusal_code === code &&
+				pp.payment_settled === true &&
+				pp.transaction === TXP &&
+				pp.receipt_id === "job-1" &&
+				pp.payment_note === NOTE,
+		);
+		check(`${m}: the note never says nothing was charged`, !/nothing (was )?charged/i.test(JSON.stringify(pp)));
+	}
+	mode = "paid_noreceipt";
+	const { payload: nr } = await call(client, "get_supplier_profile", { supplier_id: "sup-1", payment_signature: SIG });
+	check(
+		"settled without a receipt: no receipt id, tx and job in the note",
+		nr.payment_settled === true &&
+			nr.receipt_id === null &&
+			nr.payment_note === `Payment settled (transaction ${TXP}, job job-1). This call was not charged again.`,
+	);
+	for (const m of ["paid_junk_tx", "paid_junk_job", "paid_false"]) {
+		mode = m;
+		const { payload: pk } = await call(client, "get_supplier_profile", { supplier_id: "sup-1", payment_signature: SIG });
+		check(`${m}: a malformed payment block makes no claim`, pk.payment_settled === null && pk.transaction === null && pk.payment_note === null);
+	}
 	await client.close();
 }
 

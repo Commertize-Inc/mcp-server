@@ -50,6 +50,29 @@ const str = (v: unknown): string | null =>
 const txHash = (v: unknown): string | null =>
 	typeof v === "string" && /^0x[0-9a-fA-F]{64}$/.test(v) ? v : null;
 
+/**
+ * DP-FLAG-18: the backend's `payment` block on a 403/409/503 for an
+ * authorization that already settled. Relayed only when it is well formed
+ * (a tx hash and a job id); otherwise no claim either way. The note is
+ * client-facing copy (AXIOM review with DP-FLAG-9 before flag-on).
+ */
+const JOB_ID = /^[A-Za-z0-9-]{1,64}$/;
+export const settledRefusal = (b: Record<string, unknown>) => {
+	const p = (b.payment ?? null) as Record<string, unknown> | null;
+	const tx = p && p.settled === true ? txHash(p.transaction) : null;
+	const job = p && typeof p.job_id === "string" && JOB_ID.test(p.job_id) ? p.job_id : null;
+	if (!tx || !job) return {};
+	const receipt = p!.receipt_issued === true ? job : null;
+	return {
+		payment_settled: true,
+		transaction: tx,
+		receipt_id: receipt,
+		payment_note: receipt
+			? `Payment settled, receipt ${receipt}. This call was not charged again.`
+			: `Payment settled (transaction ${tx}, job ${job}). This call was not charged again.`,
+	};
+};
+
 /** The first x402 v2 `accepts` entry of a 402 body, field names kept. */
 const relayAccepts = (body: unknown) => {
 	const b = (body ?? {}) as Record<string, unknown>;
@@ -190,6 +213,14 @@ export const registerDataProductTools = (server: McpServer): void => {
 				refusal_code: z.string().nullable(),
 				/** The settlement tx the backend reported on a 202, else null. */
 				transaction: z.string().nullable(),
+				/**
+				 * true when a refusal (403/409/503) is for a payment that already
+				 * settled: it was not charged again. null = no claim either way.
+				 */
+				payment_settled: z.boolean().nullable(),
+				/** The receipt's job_id when one was issued for that payment. */
+				receipt_id: z.string().nullable(),
+				payment_note: z.string().nullable(),
 			},
 			annotations: {
 				readOnlyHint: false,
@@ -208,6 +239,9 @@ export const registerDataProductTools = (server: McpServer): void => {
 				buyer_terms: unknown;
 				refusal_code: string | null;
 				transaction: string | null;
+				payment_settled: boolean | null;
+				receipt_id: string | null;
+				payment_note: string | null;
 			} = {
 				status: "unavailable",
 				free: null,
@@ -217,6 +251,9 @@ export const registerDataProductTools = (server: McpServer): void => {
 				buyer_terms: null,
 				refusal_code: null,
 				transaction: null,
+				payment_settled: null,
+				receipt_id: null,
+				payment_note: null,
 			};
 			try {
 				const res = await getRaw(
@@ -248,7 +285,7 @@ export const registerDataProductTools = (server: McpServer): void => {
 							refusal_code: str(b.error),
 						});
 					case 403:
-						return out({ status: "refused", refusal_code: str(b.error) });
+						return out({ status: "refused", refusal_code: str(b.error), ...settledRefusal(b) });
 					case 404:
 						return out({ status: "not_found" });
 					case 409:
@@ -257,6 +294,7 @@ export const registerDataProductTools = (server: McpServer): void => {
 						return out({
 							status: b.error === "refund_queued" ? "refund_queued" : "refused",
 							refusal_code: str(b.error),
+							...settledRefusal(b),
 						});
 					case 429:
 						return out({
@@ -266,7 +304,7 @@ export const registerDataProductTools = (server: McpServer): void => {
 					default:
 						// The backend's code is relayed (e.g. output_drift: a paid
 						// replay that no longer matches its receipt, never re-charged).
-						return out({ status: "unavailable", refusal_code: str(b.error) });
+						return out({ status: "unavailable", refusal_code: str(b.error), ...settledRefusal(b) });
 				}
 			} catch (err) {
 				return fail(err, `${config.apiBaseUrl}${path}`, empty);

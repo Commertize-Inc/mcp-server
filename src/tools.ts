@@ -37,6 +37,7 @@ import {
 } from "./sandboxTools.js";
 import { SCREENER_TOOL_NAMES } from "./screenerTools.js";
 import { X402_TOOL_NAMES } from "./x402Tools.js";
+import { CHAINLINK_TOOL_NAMES } from "./chainlinkTools.js";
 import { HTTP_TOOL_ALLOWLIST } from "./httpAllowlist.js";
 import { INQUIRY_TOOL_NAME } from "./inquiryTool.js";
 import {
@@ -608,6 +609,8 @@ export const registerTools = (
 					// `registerSandboxTools` returns on. One predicate, two readers.
 					...(config.sandboxDisabled ? [] : SANDBOX_TOOL_NAMES),
 					...(config.x402Disabled ? [] : X402_TOOL_NAMES),
+					// stdio only: onSurface() drops these on HTTP (not allowlisted).
+					...(config.chainlinkFeedsDisabled ? [] : CHAINLINK_TOOL_NAMES),
 				]),
 			};
 			const file = path.join(CONTENT_DIR, "platform-info.md");

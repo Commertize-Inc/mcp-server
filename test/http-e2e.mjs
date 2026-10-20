@@ -173,6 +173,9 @@ const { KeyVerifier } = await import(path.join(DIST, "httpAuth.js"));
 const { FixedWindowLimiter } = await import(path.join(DIST, "httpRateLimit.js"));
 const { createServer } = await import(path.join(DIST, "index.js"));
 const { HTTP_TOOL_ALLOWLIST } = await import(path.join(DIST, "httpAllowlist.js"));
+// This suite simulates the Vercel edge with x-vercel-forwarded-for; clientIpOf
+// trusts that header only when VERCEL is exactly "1" (gate R-1).
+process.env.VERCEL = "1";
 
 const RPM = 40; // the SDK handshake alone is several POSTs; section 4 counts to this exactly
 const INQ = 2;

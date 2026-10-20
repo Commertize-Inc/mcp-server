@@ -462,4 +462,4 @@ section("refusals arrive as themselves");
 }
 
 server.close();
-summary("x402 e2e");
+process.exit(summary("x402 e2e") === 0 ? 0 : 1);

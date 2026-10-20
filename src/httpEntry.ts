@@ -12,6 +12,7 @@ import { FixedWindowLimiter } from "./httpRateLimit.js";
 import { createHttpHandler, type HttpLogEvent, type NodeHandler } from "./httpServer.js";
 import { analyticsConfigFrom, createAnalyticsSink } from "./analytics.js";
 import { createOpenApiHandler, createPublicHttpHandler } from "./httpPublic.js";
+import { createAgentCardHandler } from "./agentCard.js";
 import { createServer } from "./index.js";
 
 export const VERSION = "0.2.0";
@@ -72,5 +73,10 @@ export const publicHandler: NodeHandler = buildPublicHandler();
 
 /** `GET /openapi.json`, behind the same gate as `/mcp/public`. */
 export const openApiHandler: NodeHandler = createOpenApiHandler({
+	enabled: () => !config.publicDisabled,
+});
+
+/** `GET /.well-known/agent-card.json` and `/.well-known/agent.json`, same gate. */
+export const agentCardHandler: NodeHandler = createAgentCardHandler({
 	enabled: () => !config.publicDisabled,
 });

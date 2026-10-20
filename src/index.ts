@@ -15,6 +15,7 @@ import { registerInquiryTool } from "./inquiryTool.js";
 import { envelopeSdkToolErrors, type PublicErrorDetail } from "./publicSurface.js";
 import { registerSandboxTools } from "./sandboxTools.js";
 import { registerScreenerTools } from "./screenerTools.js";
+import { applyToolMeta } from "./toolMeta.js";
 import { registerX402Tools } from "./x402Tools.js";
 import {
 	registerDisclosureTool,
@@ -54,6 +55,7 @@ export const createServer = (
 			{ name: "commertize", version: "0.1.0" },
 			{ capabilities: { tools: {} } }
 		);
+		applyToolMeta(pub);
 		registerTools(pub, "public", onToolResult);
 		envelopeSdkToolErrors(pub, onToolResult);
 		return pub;
@@ -68,6 +70,8 @@ export const createServer = (
 		{ capabilities: { tools: {} } }
 	);
 
+	// Every tool carries the toolMeta.ts annotations and pricing; an unknown name throws.
+	applyToolMeta(server);
 	registerTools(server, surface);
 	/*
 	 * Registered separately from `registerTools` to keep the screener in its

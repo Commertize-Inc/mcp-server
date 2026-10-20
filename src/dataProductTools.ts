@@ -1,0 +1,255 @@
+/**
+ * Per-call Commertize data products (backend /api/agent-data, x402 v2).
+ *
+ *   data_products_catalog   what is listed, at what constant price, with
+ *                           its free quota and daily caps
+ *   get_supplier_profile    P4: the dated sanctions-screen status of each
+ *                           party Commertize screened for one supplier
+ *
+ * THIS SERVER NEVER SIGNS AND NEVER HOLDS A KEY (the x402Tools.ts rule).
+ * `get_supplier_profile` takes an optional, OPAQUE `payment_signature` that
+ * the CALLER produced with its own wallet and forwards it verbatim as the
+ * x402 v2 `PAYMENT-SIGNATURE` header. Without it the backend serves a free
+ * call or answers 402 with the requirements, which this tool relays.
+ *
+ * The payee is fixed by the backend (a compile-time Commertize address); no
+ * input here can name one. The supplier id is validated to a narrow
+ * charset and is the only path segment a caller controls.
+ *
+ * NOT REGISTERED unless COMMERTIZE_MCP_ENABLE_DATA_PRODUCTS=1.
+ */
+
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
+
+import { config } from "./config.js";
+import { DISCLAIMER } from "./disclaimer.js";
+import { envelopeShape } from "./schemas.js";
+import { fail, toResult } from "./envelope.js";
+import { getRaw } from "./http.js";
+
+export const DATA_PRODUCT_TOOL_NAMES = [
+	"data_products_catalog",
+	"get_supplier_profile",
+] as const;
+
+const envelope = (sourceUrl: string, payload: Record<string, unknown>) =>
+	toResult({
+		...payload,
+		as_of: new Date().toISOString(),
+		source_url: sourceUrl,
+		cache: { hit: false, age_seconds: 0, stale: false },
+		disclaimer: DISCLAIMER,
+		error: null,
+	});
+
+const str = (v: unknown): string | null =>
+	typeof v === "string" ? v : v === undefined || v === null ? null : String(v);
+
+/** The first x402 v2 `accepts` entry of a 402 body, field names kept. */
+const relayAccepts = (body: unknown) => {
+	const b = (body ?? {}) as Record<string, unknown>;
+	const first = (Array.isArray(b.accepts) ? b.accepts[0] : null) as
+		| Record<string, unknown>
+		| null;
+	if (!first) return null;
+	return {
+		scheme: str(first.scheme),
+		network: str(first.network),
+		amount: str(first.amount),
+		asset: str(first.asset),
+		pay_to: str(first.payTo),
+		max_timeout_seconds: Number(first.maxTimeoutSeconds ?? 0),
+	};
+};
+
+export const registerDataProductTools = (server: McpServer): void => {
+	if (config.dataProductsDisabled) return;
+
+	server.registerTool(
+		"data_products_catalog",
+		{
+			title: "Commertize per-call data products",
+			description:
+				"List the data products Commertize sells per call over x402, each with one constant price in atomic USDC units, a number of free calls per day, and daily spending caps. The price is the same for every caller. A product with no cap is not listed. No credential needed.",
+			inputSchema: {},
+			outputSchema: {
+				...envelopeShape,
+				products: z
+					.array(
+						z.object({
+							id: z.string(),
+							name: z.string(),
+							description: z.string(),
+							payment: z.string(),
+							price_atomic: z.string(),
+							free_calls_per_day: z.number(),
+							cap_per_payer_per_day_atomic: z.string(),
+							cap_global_per_day_atomic: z.string(),
+							network: z.string(),
+							pay_to: z.string(),
+						}),
+					)
+					.nullable(),
+				note: z.string().nullable(),
+			},
+			annotations: { readOnlyHint: true, openWorldHint: true },
+		},
+		async () => {
+			const path = "/api/agent-data/products";
+			const empty = { products: null, note: null };
+			try {
+				const res = await getRaw(path);
+				if (res.status !== 200 || res.body === null) {
+					return envelope(res.sourceUrl, {
+						...empty,
+						note: "This deployment does not offer per-call data products.",
+					});
+				}
+				const b = res.body as Record<string, unknown>;
+				const list = Array.isArray(b.products) ? b.products : [];
+				return envelope(res.sourceUrl, {
+					note: null,
+					products: list.map((raw) => {
+						const p = raw as Record<string, unknown>;
+						return {
+							id: String(p.id ?? ""),
+							name: String(p.name ?? ""),
+							description: String(p.description ?? ""),
+							payment: String(p.payment ?? ""),
+							price_atomic: String(p.price_atomic ?? ""),
+							free_calls_per_day: Number(p.free_calls_per_day ?? 0),
+							cap_per_payer_per_day_atomic: String(
+								p.cap_per_payer_per_day_atomic ?? "",
+							),
+							cap_global_per_day_atomic: String(
+								p.cap_global_per_day_atomic ?? "",
+							),
+							network: String(p.network ?? ""),
+							pay_to: String(p.pay_to ?? ""),
+						};
+					}),
+				});
+			} catch (err) {
+				return fail(err, `${config.apiBaseUrl}${path}`, empty);
+			}
+		},
+	);
+
+	server.registerTool(
+		"get_supplier_profile",
+		{
+			title: "Supplier screen status (dated)",
+			description:
+				"For one compute supplier, return the sanctions-screen status of each party Commertize has screened, with the date of each screen, the list version and the date the status expires. An expired or missing screen reads as not_screened. It is not a score, a rating or an approval, and it does not mean the supplier's supply chain has been screened. The first calls each day are free; after that the backend answers with x402 payment requirements. To pay, sign them with your own wallet and pass the encoded payment as payment_signature. This server never signs.",
+			inputSchema: {
+				supplier_id: z
+					.string()
+					.regex(/^[A-Za-z0-9-]{1,64}$/)
+					.describe("The supplier id."),
+				payment_signature: z
+					.string()
+					.max(8192)
+					.optional()
+					.describe(
+						"Optional. An x402 v2 PAYMENT-SIGNATURE value you signed yourself; forwarded unchanged.",
+					),
+			},
+			outputSchema: {
+				...envelopeShape,
+				status: z.enum([
+					"delivered",
+					"payment_required",
+					"pending",
+					"not_found",
+					"refused",
+					"daily_cap",
+					"rate_limited",
+					"unavailable",
+				]),
+				free: z.boolean().nullable(),
+				profile: z.unknown().nullable(),
+				receipt: z.unknown().nullable(),
+				requirements: z
+					.object({
+						scheme: z.string().nullable(),
+						network: z.string().nullable(),
+						amount: z.string().nullable(),
+						asset: z.string().nullable(),
+						pay_to: z.string().nullable(),
+						max_timeout_seconds: z.number(),
+					})
+					.nullable(),
+				buyer_terms: z.unknown().nullable(),
+				refusal_code: z.string().nullable(),
+			},
+			annotations: {
+				readOnlyHint: false,
+				openWorldHint: true,
+				idempotentHint: true,
+			},
+		},
+		async ({ supplier_id, payment_signature }) => {
+			const path = `/api/agent-data/suppliers/${encodeURIComponent(supplier_id)}/screen`;
+			const empty: {
+				status: string;
+				free: boolean | null;
+				profile: unknown;
+				receipt: unknown;
+				requirements: ReturnType<typeof relayAccepts>;
+				buyer_terms: unknown;
+				refusal_code: string | null;
+			} = {
+				status: "unavailable",
+				free: null,
+				profile: null,
+				receipt: null,
+				requirements: null,
+				buyer_terms: null,
+				refusal_code: null,
+			};
+			try {
+				const res = await getRaw(
+					path,
+					payment_signature ? { "PAYMENT-SIGNATURE": payment_signature } : {},
+				);
+				const b = (res.body ?? {}) as Record<string, unknown>;
+				const out = (over: Partial<typeof empty> & { status: string }) =>
+					envelope(res.sourceUrl, { ...empty, ...over });
+				switch (res.status) {
+					case 200:
+						return out({
+							status: "delivered",
+							free: b.free === true,
+							profile: b.output ?? null,
+							receipt: b.receipt ?? null,
+						});
+					case 202:
+						return out({ status: "pending" });
+					case 402:
+						return out({
+							status: "payment_required",
+							requirements: relayAccepts(b),
+							buyer_terms: b.buyer_terms ?? null,
+							refusal_code: str(b.error),
+						});
+					case 403:
+						return out({ status: "refused", refusal_code: str(b.error) });
+					case 404:
+						return out({ status: "not_found" });
+					case 409:
+						return out({ status: "refused", refusal_code: str(b.error) });
+					case 429:
+						return out({
+							status: b.error === "daily_cap" ? "daily_cap" : "rate_limited",
+							refusal_code: str(b.error),
+						});
+					default:
+						return out({ status: "unavailable" });
+				}
+			} catch (err) {
+				return fail(err, `${config.apiBaseUrl}${path}`, empty);
+			}
+		},
+	);
+};

@@ -34,6 +34,7 @@ import { parseBearer, type KeyVerifier } from "./httpAuth.js";
 import type { FixedWindowLimiter } from "./httpRateLimit.js";
 import { protocolVersionOf, srcOf } from "./analytics.js";
 import { clientNameOf, clientVersionOf } from "./publicSurface.js";
+import { withFix } from "./refusals.js";
 
 export interface HttpLogEvent {
 	ts: string;
@@ -166,14 +167,14 @@ export const createHttpHandler = (o: HttpHandlerOptions): NodeHandler => {
 			extra: Record<string, string> = {}
 		): void => {
 			res.writeHead(status, { ...JSON_HEADERS, ...extra });
-			res.end(JSON.stringify(body));
+			res.end(JSON.stringify(withFix(status, body)));
 		};
 
 		try {
 			if (path === "/health") {
 				if (method !== "GET") {
 					outcome = "method_not_allowed";
-					send(405, { error: "method_not_allowed" }, { allow: "GET" });
+					send(405, { error: "get_only" }, { allow: "GET" });
 					return;
 				}
 				outcome = "ok";

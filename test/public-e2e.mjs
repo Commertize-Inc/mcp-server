@@ -311,7 +311,8 @@ section("5. per-IP ceiling");
 	check(`request ${MAX + 1} is 429 with Retry-After`, over.status === 429 && Number(over.headers.get("retry-after")) >= 1, `${over.status} ${over.headers.get("retry-after")}`);
 	// front door (2026-10-20): the code is unchanged; a one-line `fix` joins it, and nothing else.
 	const overBody = await over.json();
-	check("429 body is a machine code plus a one-line fix, nothing else", JSON.stringify(Object.keys(overBody)) === JSON.stringify(["error", "fix"]) && overBody.error === "rate_limited" && typeof overBody.fix === "string" && !/\n/.test(overBody.fix), JSON.stringify(overBody));
+	// AXIOM CERT 10-20 §1: the D6 `disclaimer` is the third key.
+	check("429 body is a machine code, a one-line fix and the D6 disclaimer, nothing else", JSON.stringify(Object.keys(overBody)) === JSON.stringify(["error", "fix", "disclaimer"]) && overBody.error === "rate_limited" && typeof overBody.fix === "string" && !/\n/.test(overBody.fix), JSON.stringify(overBody));
 	const other = await post(LIST, { ip: "203.0.113.51" });
 	check("another IP has its own bucket", other.status === 200);
 	const v6a = await post(LIST, { ip: "2001:db8:1:2:aaaa::1" });

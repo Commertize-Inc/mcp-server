@@ -169,6 +169,7 @@ section("3. no key, no payment: HTTP 200 with the x402 challenge, never 401");
 	const ch = sc.wallet_proof_challenge ?? {};
 	check("the sign-in-with-x challenge is relayed (header, domain, uri, nonce)", ch.header === "SIGN-IN-WITH-X" && ch.domain === "api.commertize.com" && ch.uri?.endsWith("/sup-1/screen") && ch.nonce === "n0nce1234567");
 	check("an off-shape chain entry is dropped, the good one kept", JSON.stringify(ch.supported_chains) === JSON.stringify([{ chain_id: "eip155:84532", type: "eip191" }]));
+	check("the paid result carries the D6 disclaimer as sec_disclaimer (AXIOM cert 10-20 §1)", sc.sec_disclaimer === "Commertize is not registered with or regulated by the SEC as a broker-dealer or investment adviser. This is not a recommendation or investment advice. Consult your own advisers.");
 	check("the backend's one-line fix is relayed", typeof sc.fix === "string" && sc.fix.startsWith("Pay with x402"));
 	check("D-1 on the paid result (apx id pinned here)", typeof sc.disclaimer === "string" && apx(sc.disclaimer) === D1_ID, String(sc.disclaimer).slice(0, 80));
 	check("no payment or proof header was invented upstream", seen.length === 1 && seen[0].sig === null && seen[0].siwx === null && seen[0].auth === null);

@@ -16,6 +16,16 @@
  * characters, and it names a concrete next step.
  */
 
+/**
+ * D6 (AXIOM RULING_sec_ui_statement_mcp_2026-10-20; text CERTIFIED in
+ * CERT_front_door_copy_2026-10-20 §1, byte for byte). Its own `disclaimer`
+ * field on the agent card and every refusal body; `error.data.disclaimer` on
+ * JSON-RPC errors; `sec_disclaimer` on tool results (whose `disclaimer` field
+ * already carries D-1). Never edited, shortened or merged into `fix`.
+ */
+export const D6_DISCLAIMER =
+	"Commertize is not registered with or regulated by the SEC as a broker-dealer or investment adviser. This is not a recommendation or investment advice. Consult your own advisers.";
+
 export const PUBLIC_ENDPOINT_URL = "https://agents.commertize.com/mcp/public";
 export const AGENT_CARD_URL = "https://agents.commertize.com/.well-known/agent-card.json";
 
@@ -34,7 +44,7 @@ export const REFUSAL_FIX = Object.freeze({
 	missing_credential: `No key is needed for the public tools: POST ${PUBLIC_ENDPOINT_URL} (initialize, then tools/list).`,
 	malformed_credential: `This endpoint needs a Commertize agent key. Without one, use POST ${PUBLIC_ENDPOINT_URL}.`,
 	invalid_credential: `This key is not valid here. Without a key, use POST ${PUBLIC_ENDPOINT_URL}.`,
-	verifier_unavailable: "The key check is unavailable. Nothing was done; retry later.",
+	verifier_unavailable: "The key check is unavailable. Retry later.",
 	verifier_not_configured: `Keyed access is not open on this deployment. Use POST ${PUBLIC_ENDPOINT_URL}.`,
 	verify_rate_limited: "Too many key checks from this client. Wait for the Retry-After seconds, then retry.",
 } as const);
@@ -45,6 +55,7 @@ export type RefusalCode = keyof typeof REFUSAL_FIX;
 export const refusalBody = (code: RefusalCode, extra: Record<string, unknown> = {}) => ({
 	error: code,
 	fix: REFUSAL_FIX[code],
+	disclaimer: D6_DISCLAIMER,
 	...extra,
 });
 
@@ -68,11 +79,15 @@ export const withFix = (status: number, body: unknown): unknown => {
 	if (status < 400 || !body || typeof body !== "object") return body;
 	const b = body as Record<string, unknown>;
 	if ("fix" in b) return body;
-	if (isRefusalCode(b.error)) return { ...b, fix: REFUSAL_FIX[b.error] };
+	if (isRefusalCode(b.error)) return { ...b, fix: REFUSAL_FIX[b.error], disclaimer: D6_DISCLAIMER };
 	const e = b.error as { code?: unknown; data?: unknown } | undefined;
 	if (e && typeof e === "object" && e.data === undefined && typeof e.code === "number") {
 		const code = RPC_CODE_REFUSAL[e.code];
-		if (code) return { ...b, error: { ...e, data: { error: code, fix: REFUSAL_FIX[code] } } };
+		if (code)
+			return {
+				...b,
+				error: { ...e, data: { error: code, fix: REFUSAL_FIX[code], disclaimer: D6_DISCLAIMER } },
+			};
 	}
 	return body;
 };
@@ -81,5 +96,9 @@ export const withFix = (status: number, body: unknown): unknown => {
 export const rpcRefusal = (id: unknown, rpcCode: number, message: string, code: RefusalCode) => ({
 	jsonrpc: "2.0" as const,
 	id: id === undefined ? null : id,
-	error: { code: rpcCode, message, data: { error: code, fix: REFUSAL_FIX[code] } },
+	error: {
+		code: rpcCode,
+		message,
+		data: { error: code, fix: REFUSAL_FIX[code], disclaimer: D6_DISCLAIMER },
+	},
 });

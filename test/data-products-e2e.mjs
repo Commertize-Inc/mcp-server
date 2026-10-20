@@ -8,7 +8,8 @@
  *     as PAYMENT-SIGNATURE; without one, no payment header is sent at all.
  *  3. NO INPUT ACCEPTS A KEY OR A PAYEE.
  *  4. EVERY BACKEND ANSWER IS RELAYED AS ITSELF: 200 profile, 402
- *     requirements, 404 not_found, 429 daily_cap vs rate_limited, 403/409.
+ *     requirements, 404 not_found, 429 daily_cap vs rate_limited, 403/409,
+ *     409 refund_queued as its own status, 202 with its tx hash, 503 codes.
  *  5. THE SUPPLIER ID CANNOT STEER THE PATH.
  */
 
@@ -63,6 +64,14 @@ const server = createServer((req, res) => {
 		if (mode === "cap") return json(429, { error: "daily_cap" });
 		if (mode === "rate") return json(429, { error: "rate_limited" });
 		if (mode === "refused") return json(403, { error: "COMPLIANCE_REVIEW" });
+		if (mode === "refund") return json(409, { error: "refund_queued" });
+		if (mode === "mismatch") return json(409, { error: "input_mismatch" });
+		if (mode === "pending")
+			return json(202, { status: "pending", retry: "resend the same request", transaction: "0x" + "cd".repeat(32) });
+		if (mode === "pending_notx") return json(202, { status: "pending", retry: "resend the same request" });
+		if (mode === "pending_junk") return json(202, { status: "pending", transaction: "see etherscan <a>" });
+		if (mode === "drift") return json(503, { error: "output_drift" });
+		if (mode === "down") return json(503, { error: "unavailable" });
 		if (!sig)
 			return json(402, {
 				x402Version: 2,
@@ -171,6 +180,35 @@ section("get_supplier_profile relays every answer as itself");
 	mode = "refused";
 	const { payload: ref } = await call(client, "get_supplier_profile", { supplier_id: "sup-1" });
 	check("403 relayed with its code", ref.status === "refused" && ref.refusal_code === "COMPLIANCE_REVIEW");
+	check("a refusal carries no transaction", ref.transaction === null);
+
+	// AEGIS mcp #12 L-1: money moved and a refund is queued; never "refused".
+	mode = "refund";
+	const { payload: rq } = await call(client, "get_supplier_profile", { supplier_id: "sup-1", payment_signature: SIG });
+	check("409 refund_queued is its own status", rq.status === "refund_queued" && rq.refusal_code === "refund_queued");
+	check("refund_queued is never reported as refused", rq.status !== "refused");
+	mode = "mismatch";
+	const { payload: mm } = await call(client, "get_supplier_profile", { supplier_id: "sup-1", payment_signature: SIG });
+	check("any other 409 stays refused with its code", mm.status === "refused" && mm.refusal_code === "input_mismatch");
+
+	// AEGIS mcp #12 L-2: the 202 keeps the on-chain reference.
+	mode = "pending";
+	const { payload: pe } = await call(client, "get_supplier_profile", { supplier_id: "sup-1", payment_signature: SIG });
+	check("202 pending relays the transaction hash", pe.status === "pending" && pe.transaction === "0x" + "cd".repeat(32));
+	mode = "pending_notx";
+	const { payload: pn } = await call(client, "get_supplier_profile", { supplier_id: "sup-1", payment_signature: SIG });
+	check("202 without a transaction: null, not invented", pn.status === "pending" && pn.transaction === null);
+	mode = "pending_junk";
+	const { payload: pj } = await call(client, "get_supplier_profile", { supplier_id: "sup-1", payment_signature: SIG });
+	check("a non-hash transaction value is not relayed", pj.status === "pending" && pj.transaction === null);
+
+	// Backend #817 L-2: a paid replay that drifted is told apart from an outage.
+	mode = "drift";
+	const { payload: dr } = await call(client, "get_supplier_profile", { supplier_id: "sup-1", payment_signature: SIG });
+	check("503 output_drift relayed as unavailable with its code", dr.status === "unavailable" && dr.refusal_code === "output_drift");
+	mode = "down";
+	const { payload: dn } = await call(client, "get_supplier_profile", { supplier_id: "sup-1" });
+	check("a plain 503 is unavailable", dn.status === "unavailable" && dn.refusal_code === "unavailable");
 	await client.close();
 }
 

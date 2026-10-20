@@ -46,6 +46,10 @@ const envelope = (sourceUrl: string, payload: Record<string, unknown>) =>
 const str = (v: unknown): string | null =>
 	typeof v === "string" ? v : v === undefined || v === null ? null : String(v);
 
+/** A transaction hash relayed from the backend, or null (never invented). */
+const txHash = (v: unknown): string | null =>
+	typeof v === "string" && /^0x[0-9a-fA-F]{64}$/.test(v) ? v : null;
+
 /** The first x402 v2 `accepts` entry of a 402 body, field names kept. */
 const relayAccepts = (body: unknown) => {
 	const b = (body ?? {}) as Record<string, unknown>;
@@ -163,6 +167,8 @@ export const registerDataProductTools = (server: McpServer): void => {
 					"pending",
 					"not_found",
 					"refused",
+					// The payment moved and a refund is queued: do not pay again.
+					"refund_queued",
 					"daily_cap",
 					"rate_limited",
 					"unavailable",
@@ -182,6 +188,8 @@ export const registerDataProductTools = (server: McpServer): void => {
 					.nullable(),
 				buyer_terms: z.unknown().nullable(),
 				refusal_code: z.string().nullable(),
+				/** The settlement tx the backend reported on a 202, else null. */
+				transaction: z.string().nullable(),
 			},
 			annotations: {
 				readOnlyHint: false,
@@ -199,6 +207,7 @@ export const registerDataProductTools = (server: McpServer): void => {
 				requirements: ReturnType<typeof relayAccepts>;
 				buyer_terms: unknown;
 				refusal_code: string | null;
+				transaction: string | null;
 			} = {
 				status: "unavailable",
 				free: null,
@@ -207,6 +216,7 @@ export const registerDataProductTools = (server: McpServer): void => {
 				requirements: null,
 				buyer_terms: null,
 				refusal_code: null,
+				transaction: null,
 			};
 			try {
 				const res = await getRaw(
@@ -225,7 +235,11 @@ export const registerDataProductTools = (server: McpServer): void => {
 							receipt: b.receipt ?? null,
 						});
 					case 202:
-						return out({ status: "pending" });
+						// Keep the on-chain reference (AEGIS mcp #12 L-2).
+						return out({
+							status: "pending",
+							transaction: txHash(b.transaction),
+						});
 					case 402:
 						return out({
 							status: "payment_required",
@@ -238,14 +252,21 @@ export const registerDataProductTools = (server: McpServer): void => {
 					case 404:
 						return out({ status: "not_found" });
 					case 409:
-						return out({ status: "refused", refusal_code: str(b.error) });
+						// AEGIS mcp #12 L-1: a queued refund means money moved; a buyer
+						// reading only `status` must not take it for "nothing charged".
+						return out({
+							status: b.error === "refund_queued" ? "refund_queued" : "refused",
+							refusal_code: str(b.error),
+						});
 					case 429:
 						return out({
 							status: b.error === "daily_cap" ? "daily_cap" : "rate_limited",
 							refusal_code: str(b.error),
 						});
 					default:
-						return out({ status: "unavailable" });
+						// The backend's code is relayed (e.g. output_drift: a paid
+						// replay that no longer matches its receipt, never re-charged).
+						return out({ status: "unavailable", refusal_code: str(b.error) });
 				}
 			} catch (err) {
 				return fail(err, `${config.apiBaseUrl}${path}`, empty);

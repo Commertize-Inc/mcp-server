@@ -52,7 +52,7 @@ export const AGENT_CARD = Object.freeze({
 	defaultInputModes: ["application/json"],
 	defaultOutputModes: ["application/json"],
 	skills: SKILLS.map((s) => ({ ...s, description: s.name })),
-	disclaimer: D6_DISCLAIMER,
+	sec_disclaimer: D6_DISCLAIMER,
 });
 
 export const createAgentCardHandler = (o: { enabled: () => boolean }): NodeHandler => {

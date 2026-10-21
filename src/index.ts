@@ -14,6 +14,7 @@ import { registerInquiryTool } from "./inquiryTool.js";
 import { registerSandboxTools } from "./sandboxTools.js";
 import { registerScreenerTools } from "./screenerTools.js";
 import { registerX402Tools } from "./x402Tools.js";
+import { registerSubmissionTools } from "./submissionTools.js";
 import {
 	registerDisclosureTool,
 	registerMemoTool,
@@ -86,6 +87,9 @@ export const createServer = (surface: ToolSurface = "stdio"): McpServer => {
 	 * and its purchase terms are unratified draft text, so a tool that quotes a
 	 * price against them should not appear in a tool list. */
 	registerX402Tools(server);
+	/* Agent asset submission (funnel map A2b/A3): upstream is flag-gated and
+	 * not deployed, so OFF by default; stdio only (not HTTP-allowlisted). */
+	registerSubmissionTools(server);
 	return server;
 };
 

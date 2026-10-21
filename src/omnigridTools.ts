@@ -200,7 +200,7 @@ export const registerOmnigridTools = (server: McpServer): void => {
 		{
 			title: "Interconnection queue filings (US ISOs)",
 			description:
-				"Use when you need interconnection queue filings across US ISOs. Input: an ISO, a state or a project id, with an optional MW range; or region_snapshot with an ISO for that ISO's totals. Returns normalized public queue filings with each source and as-of date. An ISO that cannot be served is named as unavailable, never shown as zero. A record of filings, not a forecast. Paid per call with x402: sign the returned requirements with your own wallet and pass the encoded payment as payment_signature. This server never signs.",
+				"Use when you need interconnection queue filings across US ISOs. Input: an ISO, a state or a project id, with an optional MW range; or region_snapshot with an ISO for that ISO's totals. Returns normalized public queue filings (for region_snapshot: totals by state, fuel and filed in-service year) with each source and as-of date. An ISO that cannot be served is named as unavailable, never shown as zero. A record of filings, not a forecast. Paid per call with x402: sign the returned requirements with your own wallet and pass the encoded payment as payment_signature. This server never signs.",
 			inputSchema: {
 				iso: z.enum(ISOS).optional().describe("ISO or RTO."),
 				state: z.string().regex(/^[A-Za-z]{2}$/).optional().describe("Two-letter US state."),
@@ -235,14 +235,13 @@ export const registerOmnigridTools = (server: McpServer): void => {
 	server.registerTool(
 		"omnigrid_site_feasibility",
 		{
-			title: "Site feasibility screen (US)",
+			title: "Site screening data (US)",
 			description:
-				"Use when you need to screen a US site for a data center or compute load. Input: lat and lon, optional target_mw, and optional radius_km for a radius search. Returns the county and the pending public interconnection queue filings there, each field with its source and status. Substation capacity, fiber and zoning are reported as not available. Screening data, not an engineering or interconnection study. Paid per call with x402 (radius search costs more): sign the returned requirements with your own wallet and pass the encoded payment as payment_signature. This server never signs.",
+				"Use when you need public screening data for a US site for a data center or compute load. Returns, for a point in the US, its county and the pending public interconnection queue filings in that county, or in counties within a radius, with each field's source and status. Substation capacity, transmission, fiber and zoning are reported as not available. Screening data, not an engineering, interconnection or site study, and not a statement that the site can be powered. Paid per call with x402 (radius search costs more): sign the returned requirements with your own wallet and pass the encoded payment as payment_signature. This server never signs.",
 			inputSchema: {
 				lat: z.number().min(18).max(72),
 				lon: z.number().min(-180).max(-66),
 				target_mw: z.number().positive().max(5000).optional(),
-				use: z.enum(["compute", "generic_industrial"]).optional(),
 				radius_km: z.number().min(1).max(50).optional(),
 				payment_signature: PAYMENT,
 			},
@@ -254,7 +253,6 @@ export const registerOmnigridTools = (server: McpServer): void => {
 				lat: String(a.lat),
 				lon: String(a.lon),
 				target_mw: num(a.target_mw),
-				use: a.use,
 				radius_km: num(a.radius_km),
 			});
 			const product = a.radius_km === undefined ? "OG-S1" : "OG-S2";

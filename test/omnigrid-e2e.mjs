@@ -86,6 +86,26 @@ section("gate open: listed, advertised as spending tools, inputs carry no key or
 		check(`${t.name}: copy never claims headroom or a likelihood`, !/headroom|likelihood|guarantee|buildable/i.test(t.description));
 		check(`${t.name}: x402 pricing meta, no free tier`, t._meta?.["com.commertize/pricing"]?.free_tier === false);
 	}
+	// AXIOM CERT_omnigrid_og_strings_2026-10-20, byte-for-byte.
+	const site = tools.find((t) => t.name === "omnigrid_site_feasibility");
+	const queue = tools.find((t) => t.name === "omnigrid_interconnection_queue");
+	check("CERT: site title", site?.title === "Site screening data (US)", site?.title);
+	check(
+		"CERT: site description",
+		site?.description ===
+			"Use when you need public screening data for a US site for a data center or compute load. Returns, for a point in the US, its county and the pending public interconnection queue filings in that county, or in counties within a radius, with each field's source and status. Substation capacity, transmission, fiber and zoning are reported as not available. Screening data, not an engineering, interconnection or site study, and not a statement that the site can be powered. Paid per call with x402 (radius search costs more): sign the returned requirements with your own wallet and pass the encoded payment as payment_signature. This server never signs.",
+	);
+	check("CERT: queue title unchanged", queue?.title === "Interconnection queue filings (US ISOs)");
+	check(
+		"CERT: queue description names filed in-service year",
+		queue?.description.includes(
+			"Returns normalized public queue filings (for region_snapshot: totals by state, fuel and filed in-service year) with each source and as-of date.",
+		),
+	);
+	check(
+		"CERT B-4: no use input on the site tool",
+		!Object.keys(site?.inputSchema?.properties ?? {}).includes("use"),
+	);
 	await client.close();
 }
 

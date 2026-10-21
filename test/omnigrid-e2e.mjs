@@ -141,6 +141,15 @@ section("queries are canonical; payment forwarded verbatim");
 	const { payload: noIso } = await call(client, "omnigrid_interconnection_queue", { region_snapshot: true });
 	check("region without iso: bad_input, upstream not called", noIso.status === "bad_input" && seen.length === before);
 
+	// AEGIS r2 mcp16 L-1: region_snapshot with any other filter is refused,
+	// never silently dropped into a 1.00 USDC ISO-totals purchase.
+	for (const [k, v] of [["state", "VA"], ["mw_min", 10], ["mw_max", 50], ["project_id", "J1"], ["status", "all"]]) {
+		const { payload } = await call(client, "omnigrid_interconnection_queue", { iso: "PJM", region_snapshot: true, [k]: v });
+		check(`region_snapshot + ${k}: bad_input on ${k}, upstream not called`, payload.status === "bad_input" && payload.field === k && seen.length === before);
+	}
+	const { payload: falseRegion } = await call(client, "omnigrid_interconnection_queue", { iso: "PJM", state: "VA", region_snapshot: false });
+	check("region_snapshot:false with filters is a lookup", falseRegion.status !== "bad_input" && seen.at(-1).path === "/api/omnigrid/v1/interconnection-queue");
+
 	await call(client, "omnigrid_site_feasibility", { lat: 34.77, lon: -92.31 });
 	check("site basic: no radius_km", seen.at(-1).path === "/api/omnigrid/v1/site-feasibility" && seen.at(-1).qs === "lat=34.77&lon=-92.31");
 	await call(client, "omnigrid_site_feasibility", { lon: -92.31, lat: 34.77, radius_km: 20, target_mw: 50 });

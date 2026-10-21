@@ -217,6 +217,10 @@ export const registerOmnigridTools = (server: McpServer): void => {
 		async (a) => {
 			if (a.region_snapshot) {
 				if (!a.iso) return envelope("", { ...emptyBad("iso") });
+				// AEGIS r2 L-1: any other filter is refused, never dropped into a
+				// 1.00 USDC ISO-totals purchase the caller did not ask for.
+				for (const k of ["state", "mw_min", "mw_max", "project_id", "status"] as const)
+					if (a[k] !== undefined) return envelope("", { ...emptyBad(k) });
 				const query = canonical({ iso: a.iso });
 				return relayPaid(`/api/omnigrid/v1/interconnection-queue/region?${query}`, `og:OG-R1:${query}`, a.payment_signature);
 			}

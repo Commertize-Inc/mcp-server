@@ -106,6 +106,9 @@ export const TOOL_META: Readonly<Record<string, ToolMetaRow>> = Object.freeze({
 	data_products_catalog: { hints: READ_UPSTREAM, pricing: FREE },
 	// Idempotent: resending the SAME payment_signature replays one delivery.
 	get_supplier_profile: { hints: { ...WRITE_APPEND, idempotentHint: true }, pricing: X402(true) },
+	// OmniGrid (no free tier; same idempotency as get_supplier_profile)
+	omnigrid_interconnection_queue: { hints: { ...WRITE_APPEND, idempotentHint: true }, pricing: X402(false) },
+	omnigrid_site_feasibility: { hints: { ...WRITE_APPEND, idempotentHint: true }, pricing: X402(false) },
 });
 
 export class ToolMetaError extends Error {}

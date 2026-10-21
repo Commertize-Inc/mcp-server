@@ -34,7 +34,7 @@ export const DATA_PRODUCT_TOOL_NAMES = [
 	"get_supplier_profile",
 ] as const;
 
-const envelope = (sourceUrl: string, payload: Record<string, unknown>) =>
+export const envelope = (sourceUrl: string, payload: Record<string, unknown>) =>
 	toResult({
 		...payload,
 		as_of: new Date().toISOString(),
@@ -48,7 +48,7 @@ const str = (v: unknown): string | null =>
 	typeof v === "string" ? v : v === undefined || v === null ? null : String(v);
 
 /** A transaction hash relayed from the backend, or null (never invented). */
-const txHash = (v: unknown): string | null =>
+export const txHash = (v: unknown): string | null =>
 	typeof v === "string" && /^0x[0-9a-fA-F]{64}$/.test(v) ? v : null;
 
 /**
@@ -85,7 +85,7 @@ export const settledRefusal = (b: Record<string, unknown>) => {
 export const UNSETTLED_SIGNATURE_CAUTION =
 	"No result was delivered for this call, and the payment authorization you signed may still settle until its expiry. Do not re-sign with a new nonce; to retry, resend the same payment_signature.";
 
-const cautionIfSigned = (
+export const cautionIfSigned = (
 	signed: boolean,
 	settled: ReturnType<typeof settledRefusal>,
 ): { payment_note?: string } =>
@@ -126,7 +126,7 @@ export const relaySiwx = (body: unknown) => {
 };
 
 /** The first x402 v2 `accepts` entry of a 402 body, field names kept. */
-const relayAccepts = (body: unknown) => {
+export const relayAccepts = (body: unknown) => {
 	const b = (body ?? {}) as Record<string, unknown>;
 	const first = (Array.isArray(b.accepts) ? b.accepts[0] : null) as
 		| Record<string, unknown>

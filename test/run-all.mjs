@@ -39,6 +39,7 @@ const SUITES = [
 	["sandbox e2e (stub upstream)", "sandbox-e2e.mjs", { live: false }],
 	["x402 e2e (stub upstream)", "x402-e2e.mjs", { live: false }],
 	["data products e2e (stub upstream)", "data-products-e2e.mjs", { live: false }],
+	["omnigrid e2e (stub upstream)", "omnigrid-e2e.mjs", { live: false }],
 	["disclosure e2e (stub upstream)", "disclosure-e2e.mjs", { live: false }],
 	["deployment gates (offline)", "gates-e2e.mjs", { live: false }],
 	["streamable http e2e (stub upstream)", "http-e2e.mjs", { live: false }],

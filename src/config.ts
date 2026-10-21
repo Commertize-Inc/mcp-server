@@ -111,6 +111,16 @@ export const config = {
 		process.env.COMMERTIZE_MCP_ENABLE_DATA_PRODUCTS !== "1",
 
 	/**
+	 * Gate for the OmniGrid tools (omnigridTools.ts). Same parse, and they
+	 * also need the data products gate: the backend sells them on the same
+	 * rail, its labels await AXIOM certification, and /api/omnigrid/v1 404s
+	 * unless OMNIGRID_DATA_ENABLED=1.
+	 */
+	omnigridDisabled:
+		process.env.COMMERTIZE_MCP_DISABLE_OMNIGRID === "1" ||
+		process.env.COMMERTIZE_MCP_ENABLE_OMNIGRID !== "1",
+
+	/**
 	 * Gate for `request_memo`, the server's only write.
 	 *
 	 * NOT a policy gate like the offerings one — a DEPLOYMENT gate. The route

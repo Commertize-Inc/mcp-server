@@ -50,7 +50,6 @@ const ARGS = {
 	principal: {
 		full_name: "Pat Principal",
 		email: "principal@example.com",
-		organization: "Acme Solar LLC",
 		role: "Managing Member",
 		authority_attested: true,
 	},
@@ -120,7 +119,10 @@ section("3. gate open + key");
 		["free text", { ...ARGS, message: "hello" }],
 		["authority false", { ...ARGS, principal: { ...ARGS.principal, authority_attested: false } }],
 		["no principal", (({ principal, ...r }) => r)(ARGS)],
-		["markup", { ...ARGS, principal: { ...ARGS.principal, organization: "<b>x</b>" } }],
+		["markup", { ...ARGS, principal: { ...ARGS.principal, role: "<b>x</b>" } }],
+		// commertize.com #876 r2 (AEGIS M-1): the organization comes from the
+		// key holder's verified Sponsor row; a free-text one is refused.
+		["free-text organization", { ...ARGS, principal: { ...ARGS.principal, organization: "Someone Else LLC" } }],
 		["duplicate doc", { ...ARGS, documents_available: ["survey", "survey"] }],
 	]) {
 		let refused = false;

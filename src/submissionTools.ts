@@ -4,7 +4,9 @@
  * Thin relays over the Commertize API's keyed routes
  * `POST /api/agents/submissions` and `GET /api/agents/submissions/{id}`
  * (commertize.com PR #876). The API enforces everything that matters: a
- * vended key bound to a KYC-approved principal, the principal in the body
+ * vended key bound to a KYC-approved principal who belongs to a KYB-verified
+ * business (the organization is taken from that business, never sent), the
+ * principal in the body
  * being that key holder, authority attested, a per-key daily cap, and a
  * strict schema with no money terms. This server re-validates the same
  * shape so a malformed call fails before it spends a unit of the cap.
@@ -32,7 +34,7 @@ export const SUBMISSION_TOOL_NAMES = [
 ] as const;
 export const SUBMISSIONS_PATH = "/api/agents/submissions";
 
-/** Mirrors the API's lists (apps/backend/src/routes/assetSubmissions.ts). */
+/** Mirrors the API's lists (apps/backend/src/routes/agentSubmissions.ts). */
 const ASSET_CLASSES = [
 	"commercial_real_estate",
 	"industrial",
@@ -203,7 +205,7 @@ export const registerSubmissionTools = (server: McpServer): void => {
 		{
 			title: "Submit an asset your principal controls for a tokenization review",
 			description:
-				"Submit an asset that your principal controls to Commertize for a tokenization review. The principal must be the verified person who holds the agent key, and must have authority over the asset. Send the asset class, location, size band and the names of documents that exist; do not send prices, raise amounts, returns or investor terms, which this tool does not accept. Returns a submission id and the screening state (gate0 pending, atlas not_started). Nothing is promised beyond that. Any agreement that follows is signed by the human principal, never by the agent. Limited to 5 submissions per key per day. Do not retry a 400 or 403; a 429 may be retried the next UTC day.",
+				"Submit an asset that your principal controls to Commertize for a tokenization review. The principal must be the verified person who holds the agent key, must belong to a business whose verification is complete, and must have authority over the asset. The organization is taken from that business record; do not send one. Send the asset class, location, size band and the names of documents that exist; do not send prices, raise amounts, returns or investor terms, which this tool does not accept. Returns a submission id and the screening state (gate0 pending, atlas not_started). Nothing is promised beyond that. Any agreement that follows is signed by the human principal, never by the agent. Limited to 5 submissions per key per day. Do not retry a 400 or 403; a 429 may be retried the next UTC day.",
 			// A strict object, not a raw shape: the SDK wraps a raw shape in a
 			// non-strict object, which silently DROPS an extra key such as a
 			// raise amount instead of refusing the call.
@@ -234,7 +236,6 @@ export const registerSubmissionTools = (server: McpServer): void => {
 							.email()
 							.max(254)
 							.describe("Must be the email of the account that holds the agent key."),
-						organization: shortText(160),
 						role: shortText(80),
 						authority_attested: z
 							.literal(true)

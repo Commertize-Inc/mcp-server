@@ -37,6 +37,7 @@ const SUITES = [
 	["x402 e2e (stub upstream)", "x402-e2e.mjs", { live: false }],
 	["disclosure e2e (stub upstream)", "disclosure-e2e.mjs", { live: false }],
 	["deployment gates (offline)", "gates-e2e.mjs", { live: false }],
+	["agent submission e2e (stub upstream)", "submission-e2e.mjs", { live: false }],
 	["streamable http e2e (stub upstream)", "http-e2e.mjs", { live: false }],
 	["client ip /64 bucketing (offline)", "client-ip.mjs", { live: false }],
 	["language", "language-check.mjs", { live: false }],

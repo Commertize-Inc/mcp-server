@@ -157,6 +157,17 @@ export const config = {
 		process.env.COMMERTIZE_MCP_DISABLE_INQUIRY === "1" ||
 		process.env.COMMERTIZE_MCP_ENABLE_INQUIRY !== "1",
 
+	/**
+	 * Gate for `submit_asset` / `get_submission_status` (funnel map A2b/A3).
+	 * Their upstream routes (`/api/agents/submissions`, commertize.com PR
+	 * #876) are flag-gated and not deployed, so the tools are registered only
+	 * when this is the exact string "1"; DISABLE beats ENABLE. stdio only:
+	 * they are not on the HTTP allowlist.
+	 */
+	submissionsDisabled:
+		process.env.COMMERTIZE_MCP_DISABLE_SUBMISSIONS === "1" ||
+		process.env.COMMERTIZE_MCP_ENABLE_SUBMISSIONS !== "1",
+
 	/* ---------------------------------------------------------------- */
 	/* Streamable HTTP transport (remote MCP)                            */
 	/* ---------------------------------------------------------------- */

@@ -183,9 +183,12 @@ const relayPaid = async (path: string, scope: string, payment_signature?: string
 	}
 };
 
+// Second opinion #16: an x402 v2 PAYMENT-SIGNATURE is base64(JSON); any
+// other byte (CR/LF, spaces, header syntax) is refused before it is forwarded.
 const PAYMENT = z
 	.string()
 	.max(8192)
+	.regex(/^[A-Za-z0-9+/_-]+={0,2}$/)
 	.optional()
 	.describe("Optional. An x402 v2 PAYMENT-SIGNATURE value you signed yourself; forwarded unchanged.");
 

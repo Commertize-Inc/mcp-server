@@ -107,6 +107,13 @@ section("queries are canonical; payment forwarded verbatim");
 	check("payment_signature forwarded byte for byte", seen.at(-1).sig === SIG);
 	check("200 relayed as delivered with data and receipt", paid.status === "delivered" && paid.data?.records?.[0]?.queue_id === "J1" && paid.receipt !== null);
 
+	const n0 = seen.length;
+	for (const bad of ["abc\r\nX-Evil: 1", "has space", "{json}"]) {
+		const { result } = await call(client, "omnigrid_interconnection_queue", { iso: "MISO", payment_signature: bad });
+		check(`non-base64 payment_signature refused (${JSON.stringify(bad)})`, result.isError === true);
+	}
+	check("refused signatures never reach the upstream", seen.length === n0);
+
 	await call(client, "omnigrid_interconnection_queue", { iso: "PJM", region_snapshot: true });
 	check("region path, iso only", seen.at(-1).path === "/api/omnigrid/v1/interconnection-queue/region" && seen.at(-1).qs === "iso=PJM");
 

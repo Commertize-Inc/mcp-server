@@ -103,6 +103,48 @@ const outputShape = {
 	receipt_id: z.string().nullable(),
 	payment_note: z.string().nullable(),
 	fix: z.string().nullable(),
+	payer_retry: z
+		.object({
+			domain: z.string(),
+			uri: z.string(),
+			chain_id: z.string(),
+			statement: z.string(),
+			max_age_seconds: z.number(),
+		})
+		.nullable(),
+};
+
+/**
+ * Backend #868 L-1 / AEGIS mcp #16 L-1: the payer-retry sign-in-with-x
+ * extension on a 402 or 202, relayed so the agent knows exactly what its
+ * paying wallet signs for payer_proof. Every field is checked; one bad
+ * field drops the whole block (null), never a partial one. The uri must
+ * be https on the domain it names.
+ */
+export const payerRetryOf = (b: Record<string, unknown>) => {
+	const ext = (b.extensions as Record<string, unknown> | undefined)?.["sign-in-with-x"] as
+		| Record<string, unknown>
+		| undefined;
+	const info = ext?.info as Record<string, unknown> | undefined;
+	if (!ext || !info || ext.header !== "SIGN-IN-WITH-X") return null;
+	const domain = s200(info.domain, 253);
+	const uri = typeof info.uri === "string" && info.uri.length <= 2000 && /^https:\/\/[^\s]+$/.test(info.uri) ? info.uri : null;
+	const statement = s200(info.statement, 300);
+	const chains = Array.isArray(ext.supportedChains) ? ext.supportedChains : [];
+	const chain = chains.length === 1 ? (chains[0] as Record<string, unknown>) : null;
+	const chain_id = chain && chain.type === "eip191" ? s200(chain.chainId, 24) : null;
+	const age = ext.max_age_seconds;
+	if (!domain || !/^[A-Za-z0-9.-]{1,253}(:\d{1,5})?$/.test(domain) || !uri || !statement) return null;
+	if (!chain_id || !/^eip155:[1-9][0-9]{0,15}$/.test(chain_id)) return null;
+	if (typeof age !== "number" || !Number.isInteger(age) || age < 1 || age > 3600) return null;
+	let host: string;
+	try {
+		host = new URL(uri).host;
+	} catch {
+		return null;
+	}
+	if (host.toLowerCase() !== domain.toLowerCase()) return null;
+	return { domain, uri, chain_id, statement, max_age_seconds: age };
 };
 
 const s200 = (v: unknown, max = 300): string | null =>
@@ -131,6 +173,7 @@ const relayPaid = async (path: string, scope: string, payment_signature?: string
 		receipt_id: null as string | null,
 		payment_note: null as string | null,
 		fix: null as string | null,
+		payer_retry: null as ReturnType<typeof payerRetryOf>,
 	};
 	try {
 		const res = await getRaw(path, {
@@ -146,7 +189,7 @@ const relayPaid = async (path: string, scope: string, payment_signature?: string
 			case 200:
 				return out({ status: "delivered", data: b.output ?? null, receipt: b.receipt ?? null });
 			case 202:
-				return out({ status: "pending", transaction: txHash(b.transaction) });
+				return out({ status: "pending", transaction: txHash(b.transaction), payer_retry: payerRetryOf(b) });
 			case 400:
 				return out({ status: "bad_input", refusal_code: code, field: s200(b.field, 40) });
 			case 402:
@@ -155,6 +198,7 @@ const relayPaid = async (path: string, scope: string, payment_signature?: string
 					requirements: relayAccepts(b),
 					buyer_terms: b.buyer_terms ?? null,
 					refusal_code: code,
+					payer_retry: payerRetryOf(b),
 					...cautionIfSigned(!!payment_signature, {}),
 				});
 			case 403:
@@ -204,7 +248,7 @@ const PAYER_PROOF = z
 	.regex(/^[A-Za-z0-9+/_-]+={0,2}$/)
 	.optional()
 	.describe(
-		"Optional, with payment_signature only. When you retry a paid call, a SIGN-IN-WITH-X value signed by the paying wallet for this resource; forwarded unchanged. Without it a stored result is not returned.",
+		"Optional, with payment_signature only. When you retry a paid call, a SIGN-IN-WITH-X value signed by the paying wallet; forwarded unchanged. Sign for exactly the domain, uri, chain_id and statement in the payer_retry field of the earlier payment_required or pending answer. Without it a stored result is not returned.",
 	);
 
 export const registerOmnigridTools = (server: McpServer): void => {
@@ -301,4 +345,5 @@ const emptyBad = (field: string) => ({
 	receipt_id: null,
 	payment_note: null,
 	fix: null,
+	payer_retry: null,
 });

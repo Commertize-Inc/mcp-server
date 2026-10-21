@@ -19,6 +19,18 @@ const PAY_TO = "0x168b420cC50C994F8FefAC9b1fb8e30ca31479d0";
 const TERMS = "https://commertize.com/omnigrid/data-terms#interconnection-queue";
 let mode = "quote";
 let seen = [];
+// Backend #868 L-1: the payer-retry sign-in-with-x extension, as the backend emits it.
+const RETRY_URI = "https://api.commertize.com/omnigrid/v1/interconnection-queue?iso=MISO";
+const RETRY_STATEMENT = "Retrieve the result this wallet already paid for at this URI.";
+const goodExt = () => ({
+	"sign-in-with-x": {
+		info: { domain: "api.commertize.com", uri: RETRY_URI, version: "1", nonce: "ab12cd34ef56ab12", issuedAt: "2026-10-21T14:00:00.000Z", statement: RETRY_STATEMENT },
+		supportedChains: [{ chainId: "eip155:84532", type: "eip191" }],
+		header: "SIGN-IN-WITH-X",
+		max_age_seconds: 300,
+	},
+});
+let retryExt = goodExt();
 const server = createServer((req, res) => {
 	const [path, qs = ""] = req.url.split("?");
 	seen.push({ path, qs, sig: req.headers["payment-signature"] ?? null, proof: req.headers["sign-in-with-x"] ?? null });
@@ -32,7 +44,8 @@ const server = createServer((req, res) => {
 	if (mode === "stale") return json(503, { error: "unavailable", status: "unavailable", reason: "no_servable_iso", terms_url: TERMS });
 	// Backend #868 N-1: a stored authorization retried without the payer's proof.
 	if (mode === "used" && !req.headers["sign-in-with-x"])
-		return json(402, { x402Version: 2, error: "authorization_used", accepts: [], terms_url: TERMS });
+		return json(402, { x402Version: 2, error: "authorization_used", accepts: [], terms_url: TERMS, extensions: retryExt });
+	if (mode === "pending") return json(202, { status: "pending", transaction: "0x" + "ab".repeat(32), extensions: retryExt });
 	if (mode === "evil_terms") return json(402, { x402Version: 2, error: "x", accepts: [], terms_url: "https://evil.example/terms" });
 	const sig = req.headers["payment-signature"];
 	if (!sig)
@@ -201,6 +214,37 @@ section("retries: the payer's SIGN-IN-WITH-X proof is forwarded verbatim (backen
 	check("402 authorization_used relayed with its code", used.status === "payment_required" && used.refusal_code === "authorization_used");
 	const { payload: ok } = await call(client, "omnigrid_interconnection_queue", { iso: "MISO", payment_signature: SIG, payer_proof: PROOF });
 	check("the payer's retry with proof is delivered", ok.status === "delivered");
+
+	// AEGIS mcp #16 L-1: the agent learns from the relayed answer what to sign.
+	const want = { domain: "api.commertize.com", uri: RETRY_URI, chain_id: "eip155:84532", statement: RETRY_STATEMENT, max_age_seconds: 300 };
+	check("402 authorization_used relays payer_retry exactly", JSON.stringify(used.payer_retry) === JSON.stringify(want));
+	mode = "pending";
+	const { payload: pend } = await call(client, "omnigrid_interconnection_queue", { iso: "MISO", payment_signature: SIG });
+	check("202 pending relays payer_retry exactly", pend.status === "pending" && JSON.stringify(pend.payer_retry) === JSON.stringify(want));
+	mode = "quote";
+	const { payload: fresh } = await call(client, "omnigrid_interconnection_queue", { iso: "MISO" });
+	check("a fresh quote has payer_retry null", fresh.status === "payment_required" && fresh.payer_retry === null);
+	const bads = {
+		"uri on another host": (e) => (e["sign-in-with-x"].info.uri = "https://evil.example/omnigrid/v1/x"),
+		"http uri": (e) => (e["sign-in-with-x"].info.uri = RETRY_URI.replace("https:", "http:")),
+		"statement with a newline": (e) => (e["sign-in-with-x"].info.statement = "a\nb"),
+		"wrong header name": (e) => (e["sign-in-with-x"].header = "X-Other"),
+		"two chains": (e) => e["sign-in-with-x"].supportedChains.push({ chainId: "eip155:1", type: "eip191" }),
+		"non-eip191 chain": (e) => (e["sign-in-with-x"].supportedChains[0].type = "eip1271"),
+		"max age 0": (e) => (e["sign-in-with-x"].max_age_seconds = 0),
+		"missing info": (e) => delete e["sign-in-with-x"].info,
+	};
+	mode = "used";
+	for (const [name, spoil] of Object.entries(bads)) {
+		retryExt = goodExt();
+		spoil(retryExt);
+		const { payload: p } = await call(client, "omnigrid_interconnection_queue", { iso: "MISO", payment_signature: SIG });
+		check(`payer_retry is null, never partial, for ${name}`, p.status === "payment_required" && p.payer_retry === null);
+	}
+	retryExt = goodExt();
+	const { tools: tools2 } = await client.listTools();
+	for (const t of tools2.filter((x) => NAMES.includes(x.name)))
+		check(`${t.name}: payer_proof says to sign the payer_retry fields`, /payer_retry/.test(t.inputSchema?.properties?.payer_proof?.description ?? ""));
 	await client.close();
 }
 

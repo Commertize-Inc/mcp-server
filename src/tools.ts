@@ -38,6 +38,7 @@ import {
 import { SCREENER_TOOL_NAMES } from "./screenerTools.js";
 import { X402_TOOL_NAMES } from "./x402Tools.js";
 import { DATA_PRODUCT_TOOL_NAMES } from "./dataProductTools.js";
+import { OMNIGRID_TOOL_NAMES } from "./omnigridTools.js";
 import { HTTP_TOOL_ALLOWLIST } from "./httpAllowlist.js";
 import { INQUIRY_TOOL_NAME } from "./inquiryTool.js";
 import {
@@ -636,6 +637,7 @@ export const registerTools = (
 				// With a payment_signature it spends the caller's own money, the
 				// same fact as x402_fetch.
 				...(config.dataProductsDisabled ? [] : ["get_supplier_profile"]),
+				...(config.dataProductsDisabled || config.omnigridDisabled ? [] : OMNIGRID_TOOL_NAMES),
 			]);
 			const capabilities = {
 				// Derived, never asserted: with every write gate closed this server
@@ -652,6 +654,8 @@ export const registerTools = (
 				// that registers it can transact. `writeTools` is already filtered
 				// to this surface and to the open gates.
 				// get_supplier_profile with a payment_signature spends too (front door).
+				// The OmniGrid tools spend as well, but they register only when
+				// get_supplier_profile does (same data gate), so they add nothing here.
 				can_transact:
 					writeTools.includes("x402_fetch") || writeTools.includes("get_supplier_profile"),
 				write_tools: writeTools,
@@ -678,6 +682,7 @@ export const registerTools = (
 					...(config.sandboxDisabled ? [] : SANDBOX_TOOL_NAMES),
 					...(config.x402Disabled ? [] : X402_TOOL_NAMES),
 					...(config.dataProductsDisabled ? [] : DATA_PRODUCT_TOOL_NAMES),
+					...(config.dataProductsDisabled || config.omnigridDisabled ? [] : OMNIGRID_TOOL_NAMES),
 				]),
 			};
 			const file = path.join(CONTENT_DIR, "platform-info.md");

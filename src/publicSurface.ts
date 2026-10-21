@@ -41,9 +41,18 @@ export const PUBLIC_TOOL_SET: ReadonlySet<string> = new Set<string>(PUBLIC_TOOL_
 export const PUBLIC_PAID_TOOL_NAMES = ["data_products_catalog", "get_supplier_profile"] as const;
 const PUBLIC_PAID_SET: ReadonlySet<string> = new Set<string>(PUBLIC_PAID_TOOL_NAMES);
 
+/** OmniGrid paid tools: public while BOTH their gate and the data gate are open. */
+export const PUBLIC_OMNIGRID_TOOL_NAMES = [
+	"omnigrid_interconnection_queue",
+	"omnigrid_site_feasibility",
+] as const;
+const PUBLIC_OMNIGRID_SET: ReadonlySet<string> = new Set<string>(PUBLIC_OMNIGRID_TOOL_NAMES);
+
 export const isPublicTool = (name: unknown): name is string =>
 	typeof name === "string" &&
-	(PUBLIC_TOOL_SET.has(name) || (!config.dataProductsDisabled && PUBLIC_PAID_SET.has(name)));
+	(PUBLIC_TOOL_SET.has(name) ||
+		(!config.dataProductsDisabled && PUBLIC_PAID_SET.has(name)) ||
+		(!config.dataProductsDisabled && !config.omnigridDisabled && PUBLIC_OMNIGRID_SET.has(name)));
 
 /** D-1, the same constant as the server-wide DISCLAIMER (AXIOM §3). */
 export const PUBLIC_DISCLAIMER = DISCLAIMER;

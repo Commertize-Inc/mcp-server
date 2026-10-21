@@ -22,6 +22,7 @@ import { registerScreenerTools } from "./screenerTools.js";
 import { applyToolMeta } from "./toolMeta.js";
 import { registerX402Tools } from "./x402Tools.js";
 import { registerDataProductTools } from "./dataProductTools.js";
+import { registerOmnigridTools } from "./omnigridTools.js";
 import {
 	registerDisclosureTool,
 	registerMemoTool,
@@ -120,6 +121,8 @@ export const createServer = (
 	registerX402Tools(server);
 	/* Same pattern: off unless COMMERTIZE_MCP_ENABLE_DATA_PRODUCTS=1. */
 	registerDataProductTools(server);
+	/* OmniGrid: off unless COMMERTIZE_MCP_ENABLE_OMNIGRID=1 AND the data gate. */
+	registerOmnigridTools(server);
 	return server;
 };
 
@@ -149,6 +152,7 @@ const registerPublicDataProductTools = (
 		});
 	try {
 		registerDataProductTools(pub);
+		registerOmnigridTools(pub);
 	} finally {
 		s.registerTool = original;
 	}

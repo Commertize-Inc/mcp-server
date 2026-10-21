@@ -11,7 +11,11 @@
  * A KEY; payment_signature is forwarded verbatim as PAYMENT-SIGNATURE; no
  * input names a payee; every backend answer is relayed as itself. The
  * backend offers no free calls on these products, so there is no wallet
- * proof input.
+ * proof input. payer_proof is forwarded verbatim as SIGN-IN-WITH-X and only
+ * alongside payment_signature: backend #868 (AEGIS #865 N-1) answers a
+ * retry of a stored payment from its row only with a fresh proof signed by
+ * the paying wallet, so a relayed retry without one is never served. This
+ * server signs neither header.
  *
  * Query building: only known fields, each validated here, sorted and
  * URL-encoded exactly as the backend's canonicalQuery does, so the relay
@@ -111,7 +115,7 @@ const termsOf = (b: Record<string, unknown>): string | null => {
 };
 
 /** GET one paid OmniGrid path and relay the backend's answer as itself. */
-const relayPaid = async (path: string, scope: string, payment_signature?: string) => {
+const relayPaid = async (path: string, scope: string, payment_signature?: string, payer_proof?: string) => {
 	const empty = {
 		status: "unavailable" as string,
 		data: null as unknown,
@@ -132,6 +136,7 @@ const relayPaid = async (path: string, scope: string, payment_signature?: string
 		const res = await getRaw(path, {
 			...relayIdentityHeaders(scope),
 			...(payment_signature ? { "PAYMENT-SIGNATURE": payment_signature } : {}),
+			...(payment_signature && payer_proof ? { "SIGN-IN-WITH-X": payer_proof } : {}),
 		});
 		const b = (res.body ?? {}) as Record<string, unknown>;
 		const code = s200(b.error, 64);
@@ -192,6 +197,16 @@ const PAYMENT = z
 	.optional()
 	.describe("Optional. An x402 v2 PAYMENT-SIGNATURE value you signed yourself; forwarded unchanged.");
 
+// Same byte rule as PAYMENT: a SIGN-IN-WITH-X value is base64(JSON).
+const PAYER_PROOF = z
+	.string()
+	.max(4096)
+	.regex(/^[A-Za-z0-9+/_-]+={0,2}$/)
+	.optional()
+	.describe(
+		"Optional, with payment_signature only. When you retry a paid call, a SIGN-IN-WITH-X value signed by the paying wallet for this resource; forwarded unchanged. Without it a stored result is not returned.",
+	);
+
 export const registerOmnigridTools = (server: McpServer): void => {
 	if (config.omnigridDisabled || config.dataProductsDisabled) return;
 
@@ -210,11 +225,14 @@ export const registerOmnigridTools = (server: McpServer): void => {
 				status: z.enum(["pending", "all"]).optional(),
 				region_snapshot: z.boolean().optional().describe("Return one ISO's totals instead of filings (needs iso, nothing else)."),
 				payment_signature: PAYMENT,
+				payer_proof: PAYER_PROOF,
 			},
 			outputSchema: outputShape,
 			annotations: { readOnlyHint: false, openWorldHint: true, idempotentHint: true },
 		},
 		async (a) => {
+			// A proof is a retry credential for a payment: alone it buys nothing.
+			if (a.payer_proof && !a.payment_signature) return envelope("", { ...emptyBad("payer_proof") });
 			if (a.region_snapshot) {
 				if (!a.iso) return envelope("", { ...emptyBad("iso") });
 				// AEGIS r2 L-1: any other filter is refused, never dropped into a
@@ -222,7 +240,7 @@ export const registerOmnigridTools = (server: McpServer): void => {
 				for (const k of ["state", "mw_min", "mw_max", "project_id", "status"] as const)
 					if (a[k] !== undefined) return envelope("", { ...emptyBad(k) });
 				const query = canonical({ iso: a.iso });
-				return relayPaid(`/api/omnigrid/v1/interconnection-queue/region?${query}`, `og:OG-R1:${query}`, a.payment_signature);
+				return relayPaid(`/api/omnigrid/v1/interconnection-queue/region?${query}`, `og:OG-R1:${query}`, a.payment_signature, a.payer_proof);
 			}
 			const query = canonical({
 				iso: a.iso,
@@ -232,7 +250,7 @@ export const registerOmnigridTools = (server: McpServer): void => {
 				project_id: a.project_id,
 				status: a.status,
 			});
-			return relayPaid(`/api/omnigrid/v1/interconnection-queue?${query}`, `og:OG-Q1:${query}`, a.payment_signature);
+			return relayPaid(`/api/omnigrid/v1/interconnection-queue?${query}`, `og:OG-Q1:${query}`, a.payment_signature, a.payer_proof);
 		},
 	);
 
@@ -248,11 +266,14 @@ export const registerOmnigridTools = (server: McpServer): void => {
 				target_mw: z.number().positive().max(5000).optional(),
 				radius_km: z.number().min(1).max(50).optional(),
 				payment_signature: PAYMENT,
+				payer_proof: PAYER_PROOF,
 			},
 			outputSchema: outputShape,
 			annotations: { readOnlyHint: false, openWorldHint: true, idempotentHint: true },
 		},
 		async (a) => {
+			// A proof is a retry credential for a payment: alone it buys nothing.
+			if (a.payer_proof && !a.payment_signature) return envelope("", { ...emptyBad("payer_proof") });
 			const query = canonical({
 				lat: String(a.lat),
 				lon: String(a.lon),
@@ -260,7 +281,7 @@ export const registerOmnigridTools = (server: McpServer): void => {
 				radius_km: num(a.radius_km),
 			});
 			const product = a.radius_km === undefined ? "OG-S1" : "OG-S2";
-			return relayPaid(`/api/omnigrid/v1/site-feasibility?${query}`, `og:${product}:${query}`, a.payment_signature);
+			return relayPaid(`/api/omnigrid/v1/site-feasibility?${query}`, `og:${product}:${query}`, a.payment_signature, a.payer_proof);
 		},
 	);
 };

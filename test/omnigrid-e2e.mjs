@@ -21,7 +21,7 @@ let mode = "quote";
 let seen = [];
 const server = createServer((req, res) => {
 	const [path, qs = ""] = req.url.split("?");
-	seen.push({ path, qs, sig: req.headers["payment-signature"] ?? null });
+	seen.push({ path, qs, sig: req.headers["payment-signature"] ?? null, proof: req.headers["sign-in-with-x"] ?? null });
 	const json = (status, body) => {
 		res.writeHead(status, { "content-type": "application/json" });
 		res.end(JSON.stringify(body));
@@ -30,6 +30,9 @@ const server = createServer((req, res) => {
 	if (mode === "off") return json(404, { error: "not_found" });
 	if (mode === "bad") return json(400, { error: "unknown_region", field: "iso", terms_url: TERMS });
 	if (mode === "stale") return json(503, { error: "unavailable", status: "unavailable", reason: "no_servable_iso", terms_url: TERMS });
+	// Backend #868 N-1: a stored authorization retried without the payer's proof.
+	if (mode === "used" && !req.headers["sign-in-with-x"])
+		return json(402, { x402Version: 2, error: "authorization_used", accepts: [], terms_url: TERMS });
 	if (mode === "evil_terms") return json(402, { x402Version: 2, error: "x", accepts: [], terms_url: "https://evil.example/terms" });
 	const sig = req.headers["payment-signature"];
 	if (!sig)
@@ -154,6 +157,50 @@ section("queries are canonical; payment forwarded verbatim");
 	check("site basic: no radius_km", seen.at(-1).path === "/api/omnigrid/v1/site-feasibility" && seen.at(-1).qs === "lat=34.77&lon=-92.31");
 	await call(client, "omnigrid_site_feasibility", { lon: -92.31, lat: 34.77, radius_km: 20, target_mw: 50 });
 	check("site radius: canonical", seen.at(-1).qs === "lat=34.77&lon=-92.31&radius_km=20&target_mw=50", seen.at(-1).qs);
+	await client.close();
+}
+
+section("retries: the payer's SIGN-IN-WITH-X proof is forwarded verbatim (backend #868 N-1)");
+{
+	const client = await connect(ON);
+	const { tools } = await client.listTools();
+	for (const t of tools.filter((x) => NAMES.includes(x.name))) {
+		const p = t.inputSchema?.properties?.payer_proof;
+		check(`${t.name}: payer_proof input exists`, !!p);
+		check(`${t.name}: payer_proof is described as a SIGN-IN-WITH-X retry proof`, /SIGN-IN-WITH-X/.test(p?.description ?? "") && /retr/i.test(p?.description ?? ""));
+		// Tool descriptions are AXIOM-certified byte for byte and stay as they
+		// are; the retry instruction lives on the new input only.
+		check(`${t.name}: payer_proof says it needs payment_signature`, /payment_signature/.test(p?.description ?? ""));
+	}
+	seen = [];
+	mode = "quote";
+	const SIG = "eyJ4NDAyVmVyc2lvbiI6Mn0=";
+	const PROOF = "eyJ0eXBlIjoiZWlwMTkxIn0=";
+	await call(client, "omnigrid_interconnection_queue", { iso: "MISO", payment_signature: SIG });
+	check("no SIGN-IN-WITH-X header without payer_proof", seen.at(-1).proof === null);
+	await call(client, "omnigrid_interconnection_queue", { iso: "MISO", payment_signature: SIG, payer_proof: PROOF });
+	check("queue: payer_proof forwarded byte for byte as SIGN-IN-WITH-X", seen.at(-1).proof === PROOF && seen.at(-1).sig === SIG);
+	await call(client, "omnigrid_interconnection_queue", { iso: "PJM", region_snapshot: true, payment_signature: SIG, payer_proof: PROOF });
+	check("region: payer_proof forwarded", seen.at(-1).proof === PROOF);
+	await call(client, "omnigrid_site_feasibility", { lat: 34.77, lon: -92.31, payment_signature: SIG, payer_proof: PROOF });
+	check("site: payer_proof forwarded", seen.at(-1).proof === PROOF);
+
+	const n0 = seen.length;
+	const { payload: alone } = await call(client, "omnigrid_interconnection_queue", { iso: "MISO", payer_proof: PROOF });
+	check("payer_proof without payment_signature: bad_input on payer_proof, upstream not called", alone.status === "bad_input" && alone.field === "payer_proof" && seen.length === n0);
+	const { payload: alone2 } = await call(client, "omnigrid_site_feasibility", { lat: 34.77, lon: -92.31, payer_proof: PROOF });
+	check("site: payer_proof alone is bad_input, upstream not called", alone2.status === "bad_input" && seen.length === n0);
+	for (const bad of ["abc\r\nX-Evil: 1", "has space", "{json}", "a".repeat(4097)]) {
+		const { result } = await call(client, "omnigrid_interconnection_queue", { iso: "MISO", payment_signature: SIG, payer_proof: bad });
+		check(`malformed payer_proof refused (${JSON.stringify(bad).slice(0, 24)})`, result.isError === true);
+	}
+	check("refused proofs never reach the upstream", seen.length === n0);
+
+	mode = "used";
+	const { payload: used } = await call(client, "omnigrid_interconnection_queue", { iso: "MISO", payment_signature: SIG });
+	check("402 authorization_used relayed with its code", used.status === "payment_required" && used.refusal_code === "authorization_used");
+	const { payload: ok } = await call(client, "omnigrid_interconnection_queue", { iso: "MISO", payment_signature: SIG, payer_proof: PROOF });
+	check("the payer's retry with proof is delivered", ok.status === "delivered");
 	await client.close();
 }
 

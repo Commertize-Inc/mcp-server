@@ -8,7 +8,7 @@
  *      kept between requests.
  *   B. W2 (what we tell agents names only endpoints that answer): while the
  *      public gate is CLOSED (unset flag, or the kill switch), no refusal on any
- *      surface names `/mcp/public` or the agent card. The `fix` line is left
+ *      surface names `/mcp/public`, and no refusal ever names an agent card (none is served). The `fix` line is left
  *      out rather than replaced, so no new copy is introduced.
  *   C. Production wiring: `httpEntry`'s keyed handler follows the same gate as
  *      the public handler (child processes, one per environment).
@@ -84,7 +84,6 @@ const { createServer } = await tryImport("index.js");
 const { createPublicHttpHandler, createOpenApiHandler, PUBLIC_PATH = "/mcp/public" } = await tryImport("httpPublic.js");
 const { createHttpHandler } = await tryImport("httpServer.js");
 const { FixedWindowLimiter } = await tryImport("httpRateLimit.js");
-const { createAgentCardHandler } = await tryImport("agentCard.js");
 
 resetCounters();
 
@@ -120,14 +119,12 @@ const publicHandler = createPublicHttpHandler?.({
 	maxBodyBytes: 4096,
 });
 const openApi = createOpenApiHandler?.({ enabled: () => publicOpen });
-const card = createAgentCardHandler?.({ enabled: () => publicOpen });
 
 const { server: http, base: BASE } = await listen((req, res) => {
 	const u = new URL(req.url, "http://x");
 	const p = u.pathname;
 	let h;
-	if (p.startsWith("/.well-known/")) h = card;
-	else if (p === "/openapi.json") h = openApi;
+	if (p === "/openapi.json") h = openApi;
 	else if (p === "/mcp" || p === "/health" || p.startsWith("/health/")) {
 		h = keyed[u.searchParams.get("v") ?? "missing"];
 		req.url = p;
@@ -182,7 +179,7 @@ section("B. gate closed: no refusal names the no-key endpoint or the card (W2)")
 		["keyed 404", () => req("/health/x?v=missing", { method: "GET" }), 404, "not_found"],
 		["public 404", () => req(PUBLIC_PATH, { body: INIT, headers: J }), 404, "not_found"],
 		["openapi 404", () => req("/openapi.json", { method: "GET" }), 404, "not_found"],
-		["card 404", () => req("/.well-known/agent-card.json", { method: "GET" }), 404, "not_found"],
+		["well-known 404 (no card served)", () => req("/.well-known/agent-card.json", { method: "GET" }), 404, "not_found"],
 	];
 	for (const [label, run, status, code] of cases) {
 		const r = await run();
@@ -193,7 +190,12 @@ section("B. gate closed: no refusal names the no-key endpoint or the card (W2)")
 	}
 	publicOpen = true;
 	const control = await req("/nope", { body: INIT, headers: J });
-	check("control: gate OPEN, public 404 on another path still names the endpoint", control.status === 404 && POINTER.test(control.json?.fix ?? ""), control.text.slice(0, 200));
+	// not_found's certified line also names the agent card, which this server
+	// no longer serves, so it is never sent; the open-gate 401 in A is the
+	// control that a pointer line still goes out when its URL answers.
+	check("gate OPEN: a 404 on another path is not_found with no card pointer", control.status === 404 && control.json?.error === "not_found" && !/agent-card\.json|agent\.json/.test(control.text), control.text.slice(0, 200));
+	const k = await req("/mcp?v=missing", { body: INIT, headers: J });
+	check("control: gate OPEN, the keyed 401 names the no-key endpoint again", k.status === 401 && (k.json?.fix ?? "").includes(PUBLIC_URL), k.text.slice(0, 200));
 }
 
 /* ------------------------------------------------------------------ */

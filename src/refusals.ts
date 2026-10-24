@@ -63,14 +63,26 @@ export const POINTER_CODES: ReadonlySet<RefusalCode> = new Set(
 );
 
 /**
- * The fix line for `code`, or `undefined` when the line would point at the
- * no-key endpoint while that endpoint is closed (W2: a refusal never sends an
- * agent to a URL that answers 404). `publicOpen` defaults to false, so a
- * caller that does not know the gate never advertises it. The line is left
- * out rather than replaced, so there is no uncertified copy.
+ * The codes whose fix line names the agent card. This server no longer serves
+ * an A2A card (RUNE 2026-10-24, CELIUM wave-1 ARCH: a strict A2A client fails
+ * on an A2A card for an MCP endpoint; the only A2A card lives on the backend),
+ * so such a line names a URL that answers 404 and is never sent.
  */
-export const fixFor = (code: RefusalCode, publicOpen = false): string | undefined =>
-	publicOpen || !POINTER_CODES.has(code) ? REFUSAL_FIX[code] : undefined;
+export const CARD_CODES: ReadonlySet<RefusalCode> = new Set(
+	(Object.keys(REFUSAL_FIX) as RefusalCode[]).filter((c) => REFUSAL_FIX[c].includes(AGENT_CARD_URL))
+);
+
+/**
+ * The fix line for `code`, or `undefined` when the line would point at a URL
+ * that answers 404: the agent card always, the no-key endpoint while it is
+ * closed (W2). `publicOpen` defaults to false, so a caller that does not know
+ * the gate never advertises it. The line is left out rather than replaced,
+ * so there is no uncertified copy.
+ */
+export const fixFor = (code: RefusalCode, publicOpen = false): string | undefined => {
+	if (CARD_CODES.has(code)) return undefined;
+	return publicOpen || !POINTER_CODES.has(code) ? REFUSAL_FIX[code] : undefined;
+};
 
 /** The HTTP body for a refusal: the stable code plus its one-line fix. */
 export const refusalBody = (

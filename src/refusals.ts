@@ -51,13 +51,41 @@ export const REFUSAL_FIX = Object.freeze({
 
 export type RefusalCode = keyof typeof REFUSAL_FIX;
 
+/**
+ * The codes whose fix line names the no-key endpoint or the agent card,
+ * derived from the lines themselves so a new pointer line joins the set
+ * without anyone remembering to add it.
+ */
+export const POINTER_CODES: ReadonlySet<RefusalCode> = new Set(
+	(Object.keys(REFUSAL_FIX) as RefusalCode[]).filter(
+		(c) => REFUSAL_FIX[c].includes(PUBLIC_ENDPOINT_URL) || REFUSAL_FIX[c].includes(AGENT_CARD_URL)
+	)
+);
+
+/**
+ * The fix line for `code`, or `undefined` when the line would point at the
+ * no-key endpoint while that endpoint is closed (W2: a refusal never sends an
+ * agent to a URL that answers 404). `publicOpen` defaults to false, so a
+ * caller that does not know the gate never advertises it. The line is left
+ * out rather than replaced, so there is no uncertified copy.
+ */
+export const fixFor = (code: RefusalCode, publicOpen = false): string | undefined =>
+	publicOpen || !POINTER_CODES.has(code) ? REFUSAL_FIX[code] : undefined;
+
 /** The HTTP body for a refusal: the stable code plus its one-line fix. */
-export const refusalBody = (code: RefusalCode, extra: Record<string, unknown> = {}) => ({
-	error: code,
-	fix: REFUSAL_FIX[code],
-	sec_disclaimer: D6_DISCLAIMER,
-	...extra,
-});
+export const refusalBody = (
+	code: RefusalCode,
+	extra: Record<string, unknown> = {},
+	publicOpen = false
+) => {
+	const fix = fixFor(code, publicOpen);
+	return {
+		error: code,
+		...(fix === undefined ? {} : { fix }),
+		sec_disclaimer: D6_DISCLAIMER,
+		...extra,
+	};
+};
 
 const RPC_CODE_REFUSAL: Readonly<Record<number, RefusalCode>> = {
 	[-32700]: "parse_error",
@@ -75,11 +103,14 @@ const isRefusalCode = (c: unknown): c is RefusalCode =>
  * JSON-RPC error gains `data: { error, fix }`. Bodies that already carry a
  * fix, success bodies, and unknown codes are returned unchanged.
  */
-export const withFix = (status: number, body: unknown): unknown => {
+export const withFix = (status: number, body: unknown, publicOpen = false): unknown => {
 	if (status < 400 || !body || typeof body !== "object") return body;
 	const b = body as Record<string, unknown>;
 	if ("fix" in b) return body;
-	if (isRefusalCode(b.error)) return { ...b, fix: REFUSAL_FIX[b.error], sec_disclaimer: D6_DISCLAIMER };
+	if (isRefusalCode(b.error)) {
+		const fix = fixFor(b.error, publicOpen);
+		return { ...b, ...(fix === undefined ? {} : { fix }), sec_disclaimer: D6_DISCLAIMER };
+	}
 	const e = b.error as { code?: unknown; data?: unknown } | undefined;
 	if (e && typeof e === "object" && e.data === undefined && typeof e.code === "number") {
 		const code = RPC_CODE_REFUSAL[e.code];

@@ -67,7 +67,7 @@ export const createAgentCardHandler = (o: { enabled: () => boolean }): NodeHandl
 		const method = (req.method ?? "GET").toUpperCase();
 		if (!o.enabled() || !AGENT_CARD_PATHS.has(path)) {
 			res.writeHead(404, headers);
-			res.end(JSON.stringify(refusalBody("not_found")));
+			res.end(JSON.stringify(refusalBody("not_found", {}, o.enabled())));
 			return;
 		}
 		if (method !== "GET" && method !== "HEAD") {

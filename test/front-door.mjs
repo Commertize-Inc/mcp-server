@@ -170,6 +170,7 @@ const keyed = createHttpHandler({
 	log: () => {},
 	maxBodyBytes: 4096,
 	version: "test",
+	publicOpen: () => publicEnabled,
 });
 
 const route = (req, res) => {
@@ -233,7 +234,9 @@ section("A. agent card (A2A v1.0 well-known path + legacy alias)");
 	check("card: POST is 405 with a code and a fix", post.status === 405 && post.json?.error === "get_only" && isFixLine(post.json?.fix), JSON.stringify(post.json));
 	publicEnabled = false;
 	const closed = await req("/.well-known/agent.json", { method: "GET" });
-	check("card: gate closed is 404 with a code and a fix", closed.status === 404 && closed.json?.error === "not_found" && isFixLine(closed.json?.fix), JSON.stringify(closed.json));
+	// Re-stated (pointer-gate B): the not_found fix names /mcp/public and the
+	// card, so with the gate closed it is left out rather than sent.
+	check("card: gate closed is 404 with a code, no fix pointing at a closed endpoint", closed.status === 404 && closed.json?.error === "not_found" && closed.json?.fix === undefined && closed.json?.sec_disclaimer === D6, JSON.stringify(closed.json));
 	publicEnabled = true;
 }
 
@@ -267,9 +270,13 @@ section("D. every refusal is a code plus a one-line fix");
 		["keyed 404", () => req("/health/x", { method: "GET" }), 404, "not_found"],
 		["health 405", () => req("/health", { method: "POST" }), 405, "get_only"],
 	];
+	// Re-stated (pointer-gate B): a closed-gate case gets no fix, because the
+	// not_found line names the endpoint that is closed.
+	const CLOSED = new Set(["public 404 (closed gate)", "openapi 404 (closed)"]);
 	for (const [label, run, status, code] of cases) {
 		const r = await run();
-		check(`${label}: HTTP ${status}, error=${code}, one-line fix, D6 disclaimer`, r.status === status && r.json?.error === code && isFixLine(r.json?.fix) && r.json?.sec_disclaimer === D6 && r.json?.disclaimer === undefined && !r.json.fix.includes(D6), `${r.status} ${JSON.stringify(r.json)}`);
+		const fixOk = CLOSED.has(label) ? r.json?.fix === undefined : isFixLine(r.json?.fix) && !r.json.fix.includes(D6);
+		check(`${label}: HTTP ${status}, error=${code}, ${CLOSED.has(label) ? "no fix" : "one-line fix"}, D6 disclaimer`, r.status === status && r.json?.error === code && fixOk && r.json?.sec_disclaimer === D6 && r.json?.disclaimer === undefined, `${r.status} ${JSON.stringify(r.json)}`);
 	}
 	const k = await req("/mcp", { body: INIT, headers: J });
 	check("keyed 401 fix points at the no-key endpoint", typeof k.json?.fix === "string" && k.json.fix.includes(PUBLIC_URL));

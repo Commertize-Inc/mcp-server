@@ -45,6 +45,8 @@ export const buildHandler = (log: (e: HttpLogEvent) => void = logToStderr): Node
 		maxBodyBytes: config.httpMaxBodyBytes,
 		version: VERSION,
 		afterResponse: analyticsSink,
+		// The keyed 401 names /mcp/public only while that endpoint is open.
+		publicOpen: () => !config.publicDisabled,
 	});
 
 /** Module-level singleton: a warm serverless instance reuses its caches. */

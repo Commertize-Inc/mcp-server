@@ -47,6 +47,7 @@ const SUITES = [
 	["listing readiness (offline)", "listing-readiness.mjs", { live: false }],
 	["wording guard (AXIOM 10-16)", "wording-guard.mjs", { live: false }],
 	["readme directory profile (offline)", "readme-profile.mjs", { live: false }],
+	["pointer gate: keyed 401 to the no-key endpoint (stub)", "pointer-gate.mjs", { live: false }],
 ];
 
 const run = (file) =>

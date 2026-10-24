@@ -59,6 +59,12 @@ export interface HttpHandlerOptions {
 	 * analytics.ts). Never allowed to throw into the request.
 	 */
 	afterResponse?: (e: HttpLogEvent) => Promise<void>;
+	/**
+	 * Is the no-key `/mcp/public` open on this deployment? Refusal fix lines
+	 * that point there are sent only while it is (refusals.ts `fixFor`).
+	 * Absent = closed: a handler that is not told never advertises it.
+	 */
+	publicOpen?: () => boolean;
 }
 
 export type NodeHandler = (
@@ -171,7 +177,7 @@ export const createHttpHandler = (o: HttpHandlerOptions): NodeHandler => {
 			extra: Record<string, string> = {}
 		): void => {
 			res.writeHead(status, { ...JSON_HEADERS, ...extra });
-			res.end(JSON.stringify(withFix(status, body)));
+			res.end(JSON.stringify(withFix(status, body, o.publicOpen?.() === true)));
 		};
 
 		try {

@@ -53,7 +53,7 @@ export const createServer = (
 	const publicOnly = surface === "public" || (surface === "stdio" && !config.gatedToolsEnabled);
 	if (publicOnly) {
 		const pub = new McpServer(
-			{ name: "commertize", version: "0.1.0" },
+			{ name: "commertize", version: "0.2.0" },
 			{ capabilities: { tools: {} } }
 		);
 		applyToolMeta(pub);

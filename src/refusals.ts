@@ -17,8 +17,8 @@
  */
 
 /**
- * D6 (legal review RULING_sec_ui_statement_mcp_2026-10-20; text CERTIFIED in
- * CERT_front_door_copy_2026-10-20 §1, byte for byte). One field name
+ * D6 (legal review ruling on the SEC status statement, 2026-10-20; text
+ * cleared in the front-door copy review, section 1, byte for byte). One field name
  * everywhere (cert §8): `sec_disclaimer` on the agent card, every refusal
  * body, JSON-RPC `error.data`, and tool results (whose `disclaimer` field
  * keeps D-1). Never in `disclaimer`, never edited or merged into `fix`.
@@ -40,7 +40,9 @@ export const REFUSAL_FIX = Object.freeze({
 	parse_error: "The body is not valid JSON. Send one JSON-RPC 2.0 message.",
 	batch_refused: "JSON-RPC batches are not accepted. Send one message per request.",
 	tool_not_public: "That tool is not on the no-key surface. Call tools/list for the tools you can use.",
-	internal_error: "Something failed on our side. Retry later; if you sent a payment, resend the same one, never a new one.",
+	// MCP-IE-0 (apx-5ef9717ea7). No HTTP surface registers a payment tool (x402 is
+	// stdio-only, httpAllowlist.ts), so the payment clause is struck everywhere here.
+	internal_error: "Something failed on our side. Retry later.",
 	missing_credential: `No key is needed for the public tools: POST ${PUBLIC_ENDPOINT_URL} (initialize, then tools/list).`,
 	malformed_credential: `This endpoint needs a Commertize agent key. Without one, use POST ${PUBLIC_ENDPOINT_URL}.`,
 	invalid_credential: `This key is not valid here. Without a key, use POST ${PUBLIC_ENDPOINT_URL}.`,

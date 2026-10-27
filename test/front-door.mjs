@@ -21,7 +21,7 @@ import { createServer as createNodeServer } from "node:http";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { check, resetCounters, section, summary } from "./harness.mjs";
+import { check, LOOPBACK, resetCounters, section, summary } from "./harness.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const DIST = process.env.FD_DIST ?? path.resolve(HERE, "..", "dist");
@@ -58,7 +58,7 @@ const HINTS = ["readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHi
 const WRITES = new Set(["file_sponsor_inquiry", "request_memo", "sandbox_enroll", "sandbox_place_order", "x402_fetch"]);
 /** Tools whose call can be answered with an x402 challenge. */
 const PAID = new Set(["x402_fetch"]);
-/* legal review CERT_front_door_copy_2026-10-20 §1, pinned HERE byte for byte. */
+/* Legal review front-door copy (2026-10-20), section 1, pinned HERE byte for byte. */
 const D6 = "Commertize is not registered with or regulated by the SEC as a broker-dealer or investment adviser. This is not a recommendation or investment advice. Consult your own advisers.";
 const isFixLine = (f) => typeof f === "string" && f.length > 0 && f.length <= 200 && !/[\r\n]/.test(f);
 
@@ -190,8 +190,8 @@ const route = (req, res) => {
 	});
 };
 const http = createNodeServer(route);
-await new Promise((r) => http.listen(0, "127.0.0.1", r));
-const BASE = `http://127.0.0.1:${http.address().port}`;
+await new Promise((r) => http.listen(0, LOOPBACK, r));
+const BASE = `http://${LOOPBACK}:${http.address().port}`;
 
 let ip = 0;
 const req = async (p, { method = "POST", body, headers = {} } = {}) => {
@@ -308,6 +308,9 @@ section("E. the refusal vocabulary is one line each and passes the wording rule"
 	check("refusals module exports REFUSAL_FIX", entries.length > 0);
 	check("every fix is one line, at most 200 chars", entries.every(([, f]) => isFixLine(f)), entries.filter(([, f]) => !isFixLine(f)).map(([k]) => k).join(","));
 	check("no barred wording-guard word in a fix", entries.every(([, f]) => !/\b(verif\w*|vetted|audited)\b/i.test(f)));
+	// MCP-IE-0: no HTTP surface has a payment path, so no fix may imply one.
+	check("internal_error is MCP-IE-0 exactly", REFUSAL_FIX?.internal_error === "Something failed on our side. Retry later.", REFUSAL_FIX?.internal_error);
+	check("no HTTP fix line mentions a payment", entries.every(([, f]) => !/\bpayment|\bresend\b/i.test(f)), entries.filter(([, f]) => /\bpayment|\bresend\b/i.test(f)).map(([k]) => k).join(","));
 }
 
 await new Promise((r) => http.close(r));

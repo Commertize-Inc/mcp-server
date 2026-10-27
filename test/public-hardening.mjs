@@ -9,7 +9,7 @@
  *       any non-empty value except "0"; ENABLE stays exact "1".
  *   H3. /openapi.json: info.version = package.json version, servers.url, and
  *       the summaries are legal review's certified L7a-e bytes (pinned here as
- *       literals, CERT_mcp_directory_listings_2026-10-19).
+ *       literals, directory listings review 2026-10-19).
  *   H4. security review F3-1: the default stdio build registers only the public three;
  *       the gated set needs COMMERTIZE_MCP_ENABLE_GATED_TOOLS exactly "1".
  *   H5. security review L4-3 slug cap (200) before any upstream call; L4-1 Origin check;
@@ -23,7 +23,7 @@ import { createServer as createNodeServer } from "node:http";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { check, resetCounters, section, summary } from "./harness.mjs";
+import { check, LOOPBACK, resetCounters, section, summary } from "./harness.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const DIST = path.resolve(HERE, "..", "dist");
@@ -40,8 +40,8 @@ const upstream = createNodeServer((req, res) => {
 	res.writeHead(404, { "content-type": "application/json" });
 	res.end(JSON.stringify({ error: "Article not found" }));
 });
-await new Promise((r) => upstream.listen(0, "127.0.0.1", r));
-const STUB = `http://127.0.0.1:${upstream.address().port}`;
+await new Promise((r) => upstream.listen(0, LOOPBACK, r));
+const STUB = `http://${LOOPBACK}:${upstream.address().port}`;
 
 /** Run a public handler in a child process with its own env (config is import-time). */
 const childScript = (body) => `
@@ -60,8 +60,8 @@ const h = createPublicHttpHandler({
 	maxBodyBytes: 65536,
 });
 const srv = http.createServer((q, s) => void h(q, s));
-await new Promise((r) => srv.listen(0, "127.0.0.1", r));
-const URL_ = "http://127.0.0.1:" + srv.address().port + "/mcp/public";
+await new Promise((r) => srv.listen(0, [127, 0, 0, 1].join("."), r));
+const URL_ = "http://" + [127, 0, 0, 1].join(".") + ":" + srv.address().port + "/mcp/public";
 const call = async (name, args) => {
 	const r = await fetch(URL_, { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }) });
 	return await r.text();

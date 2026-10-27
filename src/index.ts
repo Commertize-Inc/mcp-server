@@ -40,7 +40,7 @@ export const createServer = (surface: ToolSurface = "stdio"): McpServer => {
 	 */
 	if (surface === "public") {
 		const pub = new McpServer(
-			{ name: "commertize", version: "0.1.0" },
+			{ name: "commertize", version: "0.2.0" },
 			{ capabilities: { tools: {} } }
 		);
 		registerTools(pub, "public");

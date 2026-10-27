@@ -1,5 +1,5 @@
 /**
- * get_news `class` and `since` (DELTA news agent-feed spec, 2026-10-21).
+ * get_news `class` and `since` (news agent-feed spec, 2026-10-21).
  * Offline: a local stub upstream records every query string it is sent.
  */
 
@@ -59,7 +59,7 @@ section("1. class and since reach the API as query parameters");
 	const q = s.seen.at(-1)?.searchParams;
 	check("not an error", result.isError !== true, JSON.stringify(payload?.error ?? null));
 	check("class passed through", q?.get("class") === "farmland", String(q));
-	check("since passed through", q?.get("since") === "2026-10-01", String(q));
+	check("since passed through in canonical minute form", q?.get("since") === "2026-10-01T00:00:00.000Z", String(q));
 	check("limit still passed", q?.get("limit") === "5", String(q));
 	check("only the new farmland article", JSON.stringify(payload.articles.map((a) => a.slug)) === '["farm-new"]', JSON.stringify(payload.articles));
 	check("tags are in the output", JSON.stringify(payload.articles[0]?.tags) === '["farmland"]');

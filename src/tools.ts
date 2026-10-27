@@ -40,6 +40,7 @@ import { X402_TOOL_NAMES } from "./x402Tools.js";
 import { HTTP_TOOL_ALLOWLIST } from "./httpAllowlist.js";
 import { INQUIRY_TOOL_NAME } from "./inquiryTool.js";
 import { PUBLIC_TOOL_SET, withPublicDisclaimer } from "./publicSurface.js";
+import { canonicalSince } from "./since.js";
 import {
 	DISCLAIMER_BLOCK_TOOLS,
 	disclaimerBlockSchema,
@@ -449,8 +450,10 @@ export const registerTools = (
 					),
 				since: z
 					.string()
-					.refine((s) => !Number.isNaN(Date.parse(s)), {
-						message: "since must be an ISO 8601 date",
+					.max(40)
+					.refine((s) => canonicalSince(s) !== null, {
+						message:
+							"since must be an ISO 8601 date (YYYY-MM-DD) or timestamp with a zone, between 2000-01-01 and tomorrow",
 					})
 					.optional()
 					.describe(
@@ -470,7 +473,9 @@ export const registerTools = (
 			const limit = args.limit ?? 20;
 			const qs = new URLSearchParams({ limit: String(limit) });
 			if (args.class) qs.set("class", args.class);
-			if (args.since) qs.set("since", args.since);
+			// Canonical minute bucket: every spelling of one minute is one cache key.
+			const since = args.since ? canonicalSince(args.since) : null;
+			if (since) qs.set("since", since);
 			const pathname = `/api/news?${qs.toString()}`;
 			try {
 				const res = await getJson<{ data?: RawArticle[] }>(pathname);
@@ -485,8 +490,8 @@ export const registerTools = (
 					const want = args.class;
 					articles = articles.filter((a) => a.tags.includes(want));
 				}
-				if (args.since) {
-					const floor = Date.parse(args.since);
+				if (since) {
+					const floor = Date.parse(since);
 					articles = articles.filter((a) => {
 						const t = a.published_at ? Date.parse(a.published_at) : NaN;
 						return !Number.isNaN(t) && t >= floor;

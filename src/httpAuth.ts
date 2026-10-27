@@ -2,7 +2,7 @@
  * Bearer-key authentication for the HTTP transport.
  *
  * The key format mirrors the backend's agent-platform keys EXACTLY
- * (`apps/backend/src/agentPlatform/keys.ts`): `cfa_<16 hex>_<43 base64url>`.
+ * (the Commertize API key format): `cfa_<16 hex>_<43 base64url>`.
  * The shape check is anchored and exact-length, so a string that is not a key
  * we minted is refused here and costs no upstream call.
  *

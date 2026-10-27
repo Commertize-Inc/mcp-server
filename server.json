@@ -1,0 +1,10 @@
+{
+	"$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+	"name": "com.commertize/agents",
+	"title": "Commertize Agents",
+	"description": "MCP server for Commertize, the digital capital markets platform for real-world assets.",
+	"repository": { "url": "https://github.com/Commertize-Inc/mcp-server", "source": "github" },
+	"websiteUrl": "https://commertize.com",
+	"version": "0.1.0",
+	"remotes": [{ "type": "streamable-http", "url": "https://agents.commertize.com/mcp/public?src=mcp-registry" }]
+}

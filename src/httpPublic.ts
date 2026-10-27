@@ -38,6 +38,7 @@ import {
 	isPublicTool,
 	type PublicErrorDetail,
 } from "./publicSurface.js";
+import { refusalBody, rpcRefusal } from "./refusals.js";
 
 export const PUBLIC_PATH = "/mcp/public";
 
@@ -101,12 +102,6 @@ const readBody = (req: IncomingMessage, max: number): Promise<string | null> =>
 		req.on("error", reject);
 	});
 
-const rpcError = (id: unknown, code: number, message: string) => ({
-	jsonrpc: "2.0" as const,
-	id: id === undefined ? null : id,
-	error: { code, message },
-});
-
 export const createPublicHttpHandler = (o: PublicHandlerOptions): NodeHandler => {
 	const now = o.now ?? Date.now;
 
@@ -135,38 +130,38 @@ export const createPublicHttpHandler = (o: PublicHandlerOptions): NodeHandler =>
 		try {
 			if (!o.enabled() || path !== PUBLIC_PATH) {
 				outcome = "not_found";
-				send(404, { error: "not_found" });
+				send(404, refusalBody("not_found"));
 				return;
 			}
 			if (method !== "POST") {
 				outcome = "method_not_allowed";
-				send(405, { error: "method_not_allowed" }, { allow: "POST" });
+				send(405, refusalBody("method_not_allowed"), { allow: "POST" });
 				return;
 			}
 			// The Origin value is caller-chosen text: never logged.
 			if (!originAllowed(req.headers.origin)) {
 				outcome = "origin_refused";
-				send(403, { error: "origin_not_allowed" });
+				send(403, refusalBody("origin_not_allowed"));
 				return;
 			}
 
 			const limit = o.ipLimiter.hit(clientIpOf(req));
 			if (!limit.allowed) {
 				outcome = "rate_limited";
-				send(429, { error: "rate_limited" }, { "retry-after": String(limit.retryAfterSeconds) });
+				send(429, refusalBody("rate_limited"), { "retry-after": String(limit.retryAfterSeconds) });
 				return;
 			}
 
 			const ct = String(req.headers["content-type"] ?? "");
 			if (!/^application\/json(?:[ \t]*;|$)/i.test(ct)) {
 				outcome = "unsupported_media_type";
-				send(415, { error: "unsupported_media_type" });
+				send(415, refusalBody("unsupported_media_type"));
 				return;
 			}
 			const raw = await readBody(req, o.maxBodyBytes);
 			if (raw === null) {
 				outcome = "payload_too_large";
-				send(413, { error: "payload_too_large" });
+				send(413, refusalBody("payload_too_large"));
 				return;
 			}
 			let parsed: unknown;
@@ -174,7 +169,7 @@ export const createPublicHttpHandler = (o: PublicHandlerOptions): NodeHandler =>
 				parsed = JSON.parse(raw);
 			} catch {
 				outcome = "parse_error";
-				send(400, rpcError(null, -32700, "Parse error"));
+				send(400, rpcRefusal(null, -32700, "Parse error", "parse_error"));
 				return;
 			}
 
@@ -204,7 +199,7 @@ export const createPublicHttpHandler = (o: PublicHandlerOptions): NodeHandler =>
 				tool = isPublicTool(name) ? name : "(refused)";
 				if (!isPublicTool(name)) {
 					outcome = "tool_refused";
-					send(403, rpcError(msg.id, -32601, "Method not found"));
+					send(403, rpcRefusal(msg.id, -32601, "Method not found", "tool_not_public"));
 					return;
 				}
 			}
@@ -219,7 +214,7 @@ export const createPublicHttpHandler = (o: PublicHandlerOptions): NodeHandler =>
 			 */
 			if (Array.isArray(parsed)) {
 				outcome = "batch_refused";
-				send(400, rpcError(null, -32600, "Invalid Request"));
+				send(400, rpcRefusal(null, -32600, "Invalid Request", "batch_refused"));
 				return;
 			}
 
@@ -257,7 +252,7 @@ export const createPublicHttpHandler = (o: PublicHandlerOptions): NodeHandler =>
 				event: "public_error",
 				message: err instanceof Error ? err.message : String(err),
 			});
-			if (!res.headersSent) send(500, { error: "internal_error" });
+			if (!res.headersSent) send(500, refusalBody("internal_error"));
 		} finally {
 			const evt: HttpLogEvent = {
 				ts: new Date(now()).toISOString(),
@@ -351,12 +346,12 @@ export const createOpenApiHandler = (o: { enabled: () => boolean }): NodeHandler
 		const method = (req.method ?? "GET").toUpperCase();
 		if (!o.enabled() || path !== OPENAPI_PATH) {
 			res.writeHead(404, JSON_HEADERS);
-			res.end(JSON.stringify({ error: "not_found" }));
+			res.end(JSON.stringify(refusalBody("not_found")));
 			return;
 		}
 		if (method !== "GET" && method !== "HEAD") {
 			res.writeHead(405, { ...JSON_HEADERS, allow: "GET, HEAD" });
-			res.end(JSON.stringify({ error: "method_not_allowed" }));
+			res.end(JSON.stringify(refusalBody("get_only")));
 			return;
 		}
 		res.writeHead(200, JSON_HEADERS);

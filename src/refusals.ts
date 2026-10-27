@@ -30,7 +30,8 @@ export const PUBLIC_ENDPOINT_URL = "https://agents.commertize.com/mcp/public";
 export const AGENT_CARD_URL = "https://agents.commertize.com/.well-known/agent-card.json";
 
 export const REFUSAL_FIX = Object.freeze({
-	not_found: `Unknown path. The no-key MCP endpoint is POST ${PUBLIC_ENDPOINT_URL}; the agent card is at ${AGENT_CARD_URL}.`,
+	// MCP-NF-OPEN (apx-9bd2608f05); sent only while the public endpoint is open.
+	not_found: `Unknown path. The no-key MCP endpoint is POST ${PUBLIC_ENDPOINT_URL}.`,
 	method_not_allowed: "Use POST with a JSON-RPC 2.0 body. This endpoint keeps no session and opens no stream.",
 	origin_not_allowed: "Call from a server-side client without an Origin header; browser origins other than agents.commertize.com are refused.",
 	rate_limited: "Too many requests from this client. Wait for the Retry-After seconds, then retry.",
@@ -53,13 +54,57 @@ export const REFUSAL_FIX = Object.freeze({
 
 export type RefusalCode = keyof typeof REFUSAL_FIX;
 
+/**
+ * The codes whose fix line names the no-key endpoint or the agent card,
+ * derived from the lines themselves so a new pointer line joins the set
+ * without anyone remembering to add it.
+ */
+export const POINTER_CODES: ReadonlySet<RefusalCode> = new Set(
+	(Object.keys(REFUSAL_FIX) as RefusalCode[]).filter(
+		(c) => REFUSAL_FIX[c].includes(PUBLIC_ENDPOINT_URL) || REFUSAL_FIX[c].includes(AGENT_CARD_URL)
+	)
+);
+
+/**
+ * The codes whose fix line names the agent card. This server no longer serves
+ * an A2A card (platform 2026-10-24, architecture wave-1 ARCH: a strict A2A client fails
+ * on an A2A card for an MCP endpoint; the only A2A card lives on the backend),
+ * so such a line names a URL that answers 404 and is never sent.
+ */
+export const CARD_CODES: ReadonlySet<RefusalCode> = new Set(
+	(Object.keys(REFUSAL_FIX) as RefusalCode[]).filter((c) => REFUSAL_FIX[c].includes(AGENT_CARD_URL))
+);
+
+/**
+ * The fix line for `code`, or `undefined` when the line would point at a URL
+ * that answers 404: the agent card always, the no-key endpoint while it is
+ * closed (W2). `publicOpen` defaults to false, so a caller that does not know
+ * the gate never advertises it. The line is left out rather than replaced,
+ * so there is no uncertified copy.
+ */
+/** MCP-NF-CLOSED (apx-803346764c): the not_found line while the public endpoint is closed. It names no URL. */
+export const NOT_FOUND_CLOSED = "Unknown path. Check the URL and the HTTP method.";
+
+export const fixFor = (code: RefusalCode, publicOpen: boolean): string | undefined => {
+	if (code === "not_found" && !publicOpen) return NOT_FOUND_CLOSED;
+	if (CARD_CODES.has(code)) return undefined;
+	return publicOpen || !POINTER_CODES.has(code) ? REFUSAL_FIX[code] : undefined;
+};
+
 /** The HTTP body for a refusal: the stable code plus its one-line fix. */
-export const refusalBody = (code: RefusalCode, extra: Record<string, unknown> = {}) => ({
-	error: code,
-	fix: REFUSAL_FIX[code],
-	sec_disclaimer: D6_DISCLAIMER,
-	...extra,
-});
+export const refusalBody = (
+	code: RefusalCode,
+	extra: Record<string, unknown>,
+	publicOpen: boolean
+) => {
+	const fix = fixFor(code, publicOpen);
+	return {
+		error: code,
+		...(fix === undefined ? {} : { fix }),
+		sec_disclaimer: D6_DISCLAIMER,
+		...extra,
+	};
+};
 
 const RPC_CODE_REFUSAL: Readonly<Record<number, RefusalCode>> = {
 	[-32700]: "parse_error",
@@ -77,19 +122,28 @@ const isRefusalCode = (c: unknown): c is RefusalCode =>
  * JSON-RPC error gains `data: { error, fix }`. Bodies that already carry a
  * fix, success bodies, and unknown codes are returned unchanged.
  */
-export const withFix = (status: number, body: unknown): unknown => {
+export const withFix = (status: number, body: unknown, publicOpen: boolean): unknown => {
 	if (status < 400 || !body || typeof body !== "object") return body;
 	const b = body as Record<string, unknown>;
 	if ("fix" in b) return body;
-	if (isRefusalCode(b.error)) return { ...b, fix: REFUSAL_FIX[b.error], sec_disclaimer: D6_DISCLAIMER };
+	if (isRefusalCode(b.error)) {
+		const fix = fixFor(b.error, publicOpen);
+		return { ...b, ...(fix === undefined ? {} : { fix }), sec_disclaimer: D6_DISCLAIMER };
+	}
 	const e = b.error as { code?: unknown; data?: unknown } | undefined;
 	if (e && typeof e === "object" && e.data === undefined && typeof e.code === "number") {
 		const code = RPC_CODE_REFUSAL[e.code];
-		if (code)
+		if (code) {
+			// Through fixFor, so a future pointer line cannot bypass the gate.
+			const fix = fixFor(code, publicOpen);
 			return {
 				...b,
-				error: { ...e, data: { error: code, fix: REFUSAL_FIX[code], sec_disclaimer: D6_DISCLAIMER } },
+				error: {
+					...e,
+					data: { error: code, ...(fix === undefined ? {} : { fix }), sec_disclaimer: D6_DISCLAIMER },
+				},
 			};
+		}
 	}
 	return body;
 };

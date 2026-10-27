@@ -40,6 +40,7 @@ const SUITES = [
 	["streamable http e2e (stub upstream)", "http-e2e.mjs", { live: false }],
 	["get_news class/since (stub upstream)", "news-filters.mjs", { live: false }],
 	["since and cache bound (stub upstream)", "since-cache.mjs", { live: false }],
+	["entry gate wiring (built handlers)", "entry-gate.mjs", { live: false }],
 	["version pin (offline)", "version-pin.mjs", { live: false }],
 	["client ip /64 bucketing (offline)", "client-ip.mjs", { live: false }],
 	["platform reads e2e (stub upstream)", "platform-reads-e2e.mjs", { live: false }],
@@ -51,6 +52,7 @@ const SUITES = [
 	["listing readiness (offline)", "listing-readiness.mjs", { live: false }],
 	["wording guard (legal review 10-16)", "wording-guard.mjs", { live: false }],
 	["readme directory profile (offline)", "readme-profile.mjs", { live: false }],
+	["pointer gate: keyed 401 to the no-key endpoint (stub)", "pointer-gate.mjs", { live: false }],
 ];
 
 const run = (file) =>

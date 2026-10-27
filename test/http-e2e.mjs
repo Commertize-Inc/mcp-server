@@ -194,6 +194,7 @@ const inquiryLimiter = new FixedWindowLimiter(INQ, 60 * 60_000);
 const VERIFY_PER_IP = 6;
 const verifyLimiter = new FixedWindowLimiter(VERIFY_PER_IP, 60_000);
 const handler = createHttpHandler({
+	publicOpen: () => false,
 	verifier,
 	requestLimiter,
 	inquiryLimiter,

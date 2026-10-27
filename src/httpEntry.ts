@@ -12,7 +12,6 @@ import { FixedWindowLimiter } from "./httpRateLimit.js";
 import { createHttpHandler, type HttpLogEvent, type NodeHandler } from "./httpServer.js";
 import { analyticsConfigFrom, createAnalyticsSink } from "./analytics.js";
 import { createOpenApiHandler, createPublicHttpHandler } from "./httpPublic.js";
-import { createAgentCardHandler } from "./agentCard.js";
 import { createServer } from "./index.js";
 
 export const VERSION = "0.2.0";
@@ -45,6 +44,8 @@ export const buildHandler = (log: (e: HttpLogEvent) => void = logToStderr): Node
 		maxBodyBytes: config.httpMaxBodyBytes,
 		version: VERSION,
 		afterResponse: analyticsSink,
+		// The keyed 401 names /mcp/public only while that endpoint is open.
+		publicOpen: () => !config.publicDisabled,
 	});
 
 /** Module-level singleton: a warm serverless instance reuses its caches. */
@@ -76,7 +77,3 @@ export const openApiHandler: NodeHandler = createOpenApiHandler({
 	enabled: () => !config.publicDisabled,
 });
 
-/** `GET /.well-known/agent-card.json` and `/.well-known/agent.json`, same gate. */
-export const agentCardHandler: NodeHandler = createAgentCardHandler({
-	enabled: () => !config.publicDisabled,
-});

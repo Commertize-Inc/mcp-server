@@ -446,6 +446,7 @@ section("10. end to end: initialize/tools-list with ?src= on /mcp/public, auth f
 					: { ok: false, status: 401, code: "missing_credential", message: "x", cached: true },
 	};
 	const keyedHandler = createHttpHandler({
+		publicOpen: () => false,
 		verifier: fakeVerifier,
 		requestLimiter: new FixedWindowLimiter(100, 60_000),
 		inquiryLimiter: new FixedWindowLimiter(2, 60_000),

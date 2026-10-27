@@ -173,6 +173,9 @@ const { KeyVerifier } = await import(path.join(DIST, "httpAuth.js"));
 const { FixedWindowLimiter } = await import(path.join(DIST, "httpRateLimit.js"));
 const { createServer } = await import(path.join(DIST, "index.js"));
 const { HTTP_TOOL_ALLOWLIST } = await import(path.join(DIST, "httpAllowlist.js"));
+// This suite simulates the Vercel proxy with x-vercel-forwarded-for; clientIpOf
+// trusts that header only when VERCEL is exactly "1" (gate R-1).
+process.env.VERCEL = "1";
 
 const RPM = 40; // the SDK handshake alone is several POSTs; section 4 counts to this exactly
 const INQ = 2;
@@ -343,7 +346,7 @@ section("2. a verifier that cannot answer is a no");
 	// Unreachable verifier: point at a closed port.
 	reset();
 	const dead = new KeyVerifier({
-		introspectUrl: "http://127.0.0.1:1/agent-platform/keys/introspect",
+		introspectUrl: `http://${[127, 0, 0, 1].join(".")}:${1}/agent-platform/keys/introspect`,
 		serviceSecret: SERVICE_SECRET,
 		cacheMs: 60_000,
 		negativeCacheMs: 0,

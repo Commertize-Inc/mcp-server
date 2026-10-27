@@ -122,6 +122,9 @@ process.env.COMMERTIZE_MCP_ENABLE_GATED_TOOLS = "1";
 
 const { createPublicHttpHandler, PUBLIC_PATH } = await import(path.join(DIST, "httpPublic.js"));
 const { FixedWindowLimiter } = await import(path.join(DIST, "httpRateLimit.js"));
+// This suite simulates the Vercel proxy with x-vercel-forwarded-for; clientIpOf
+// trusts that header only when VERCEL is exactly "1" (gate R-1).
+process.env.VERCEL = "1";
 const { createServer } = await import(path.join(DIST, "index.js"));
 const { PUBLIC_DISCLAIMER, PUBLIC_DISCLAIMER_ID, PUBLIC_TOOL_NAMES, clientNameOf } = await import(
 	path.join(DIST, "publicSurface.js")

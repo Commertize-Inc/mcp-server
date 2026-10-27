@@ -117,6 +117,8 @@ process.env.COMMERTIZE_MCP_ENABLE_OFFERINGS = "1";
 process.env.COMMERTIZE_MCP_ENABLE_INQUIRY = "1";
 process.env.COMMERTIZE_MCP_ENABLE_MEMO = "1";
 process.env.COMMERTIZE_MCP_ENABLE_DISCLOSURE = "1";
+// F3-1: the stdio comparison in section 7 is of the opted-in gated build.
+process.env.COMMERTIZE_MCP_ENABLE_GATED_TOOLS = "1";
 
 const { createPublicHttpHandler, PUBLIC_PATH } = await import(path.join(DIST, "httpPublic.js"));
 const { FixedWindowLimiter } = await import(path.join(DIST, "httpRateLimit.js"));

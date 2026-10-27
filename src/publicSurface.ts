@@ -22,7 +22,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
-import { config } from "./config.js";
 import { DISCLAIMER, DISCLAIMER_ID } from "./disclaimer.js";
 import { withDisclaimerBlock } from "./disclaimerBlock.js";
 
@@ -38,13 +37,44 @@ export const PUBLIC_DISCLAIMER = DISCLAIMER;
 export const PUBLIC_DISCLAIMER_ID = DISCLAIMER_ID;
 
 /**
+ * Fixed error text for the anonymous surface (pre-flag hardening H1). An
+ * error envelope's `message` used to carry the raw cause: a filesystem path
+ * (ENOENT /var/task/...), the configured API base URL, a resolver error. On
+ * `/mcp/public` the reader is anyone, so the message becomes the fixed text
+ * for its code, `source_url` becomes "", and the raw cause goes to the
+ * server-side log only (`onDetail`). `code` and `retryable` are kept: a
+ * closed vocabulary with no environment detail in it.
+ */
+export const PUBLIC_ERROR_MESSAGES: Readonly<Record<string, string>> = {
+	INVALID_ARGUMENT: "Invalid arguments.",
+	NOT_FOUND: "Not found.",
+	UPSTREAM_TIMEOUT: "The upstream service timed out. Retry later.",
+	UPSTREAM_UNREACHABLE: "The upstream service is unavailable. Retry later.",
+	UPSTREAM_ERROR: "The upstream service is unavailable. Retry later.",
+	UPSTREAM_BAD_BODY: "The upstream service is unavailable. Retry later.",
+	INTERNAL_ERROR: "Internal error",
+};
+export const publicErrorMessageFor = (code: unknown): string =>
+	(typeof code === "string" && Object.hasOwn(PUBLIC_ERROR_MESSAGES, code)
+		? PUBLIC_ERROR_MESSAGES[code]
+		: undefined) ?? "Internal error";
+
+/** Raw cause of a public error, bounded, for the server-side log only. */
+export type PublicErrorDetail = { code: string; detail: string };
+const DETAIL_MAX = 500;
+const boundDetail = (s: unknown): string => String(s ?? "").slice(0, DETAIL_MAX);
+
+/**
  * Replace the envelope's `disclaimer` with the public one, and re-render the
  * text content from the same object so the two never disagree.
  *
  * Fail closed: a result with no structured envelope cannot carry the
  * disclaimer, so it is replaced by an error result that does.
  */
-export const withPublicDisclaimer = (r: CallToolResult): CallToolResult => {
+export const withPublicDisclaimer = (
+	r: CallToolResult,
+	onDetail?: (d: PublicErrorDetail) => void
+): CallToolResult => {
 	const s = r.structuredContent;
 	if (!s || typeof s !== "object" || !("disclaimer" in s)) {
 		const structured = {
@@ -58,7 +88,19 @@ export const withPublicDisclaimer = (r: CallToolResult): CallToolResult => {
 			isError: true,
 		};
 	}
-	const structured = { ...s, disclaimer: PUBLIC_DISCLAIMER };
+	const structured: Record<string, unknown> = { ...s, disclaimer: PUBLIC_DISCLAIMER };
+	const err = (s as { error?: unknown }).error;
+	if (err && typeof err === "object") {
+		const e = err as { code?: unknown; message?: unknown; retryable?: unknown };
+		const code = typeof e.code === "string" && /^[A-Z_]{1,40}$/.test(e.code) ? e.code : "INTERNAL_ERROR";
+		try {
+			onDetail?.({ code, detail: boundDetail(e.message) });
+		} catch {
+			/* a log sink never changes a result */
+		}
+		structured.error = { code, message: publicErrorMessageFor(code), retryable: e.retryable === true };
+		structured.source_url = "";
+	}
 	return {
 		...r,
 		content: [{ type: "text", text: JSON.stringify(structured, null, 2) }],
@@ -84,16 +126,14 @@ export const withPublicDisclaimer = (r: CallToolResult): CallToolResult => {
  * fail the suite rather than silently drop the disclaimer.
  */
 export const publicToolError = (message: string): CallToolResult => {
+	const code = /Input validation error/.test(message) ? "INVALID_ARGUMENT" : "INTERNAL_ERROR";
+	// H1: fixed text and no base URL; the SDK's message is logged by the caller.
 	const structured = {
 		as_of: new Date().toISOString(),
-		source_url: config.apiBaseUrl,
+		source_url: "",
 		cache: { hit: false, age_seconds: 0, stale: false },
 		disclaimer: PUBLIC_DISCLAIMER,
-		error: {
-			code: /Input validation error/.test(message) ? "INVALID_ARGUMENT" : "INTERNAL_ERROR",
-			message,
-			retryable: false,
-		},
+		error: { code, message: publicErrorMessageFor(code), retryable: false },
 	};
 	return withDisclaimerBlock({
 		content: [{ type: "text", text: JSON.stringify(structured, null, 2) }],
@@ -104,7 +144,7 @@ export const publicToolError = (message: string): CallToolResult => {
 
 export const envelopeSdkToolErrors = (
 	server: McpServer,
-	onToolResult?: (tool: string, r: CallToolResult) => void
+	onToolResult?: (tool: string, r: CallToolResult, d?: PublicErrorDetail) => void
 ): void => {
 	(server as unknown as { createToolError: (m: string) => CallToolResult }).createToolError = (
 		message: string
@@ -112,7 +152,8 @@ export const envelopeSdkToolErrors = (
 		const r = publicToolError(message);
 		try {
 			// The tool name is not known here; the observer reads only the code.
-			onToolResult?.("(sdk)", r);
+			const code = (r.structuredContent as { error: { code: string } }).error.code;
+			onToolResult?.("(sdk)", r, { code, detail: boundDetail(message) });
 		} catch {
 			/* an observer never changes a result */
 		}

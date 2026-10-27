@@ -109,34 +109,49 @@ section("2-3. allowlisted, anonymous capture");
 	check("uaProductOf: junk -> unknown", ["<x>/1", "", null, "a b/1".replace(" ", "\u0000")].every((u) => uaProductOf(u).name === "unknown"));
 }
 
-section("2a. T5-S1 disclosure (legal review apx-00aee28eb6) matches what is sent");
+section("2a. T5-S1 r2 disclosure (legal review apx-de218a8e27) matches what is sent");
 {
-	const { ANALYTICS_DISCLOSURE, ANALYTICS_DISCLOSURE_ID } = await import(path.join(DIST, "analytics.js"));
+	const { ANALYTICS_DISCLOSURE, ANALYTICS_DISCLOSURE_ID, toCaptures } = await import(path.join(DIST, "analytics.js"));
 	const { createHash } = await import("node:crypto");
 	const id = "apx-" + createHash("sha1").update(ANALYTICS_DISCLOSURE, "utf8").digest("hex").slice(0, 10);
-	check("disclosure hashes to apx-00aee28eb6", id === "apx-00aee28eb6" && ANALYTICS_DISCLOSURE_ID === id, id);
-	// Each named field, mapped to the capture key that carries it. A field the
-	// text names but the capture lacks, or a capture key the text omits, fails.
+	// legal review CERT 2026-10-19 A-9, the exact bytes, pinned as a literal (never read back from src).
+	const T5_R2 =
+		"The hosted endpoints send anonymous usage metrics to our analytics provider when a client connects, lists the tools, calls a tool or is refused at the key check: the event type, which endpoint was used, the directory link the client came from, the tool name, the client application's family and version, the MCP protocol version, the outcome, any error code, the HTTP status, the response time and the server version. These metrics do not include your key, your IP address, the arguments you send or the data returned.";
+	check("pinned literal hashes to apx-de218a8e27", "apx-" + createHash("sha1").update(T5_R2, "utf8").digest("hex").slice(0, 10) === "apx-de218a8e27");
+	check("ANALYTICS_DISCLOSURE === the certified bytes", ANALYTICS_DISCLOSURE === T5_R2);
+	check("disclosure id is apx-de218a8e27", id === "apx-de218a8e27" && ANALYTICS_DISCLOSURE_ID === id, id);
+	check("withdrawn id apx-00aee28eb6 is gone", ANALYTICS_DISCLOSURE_ID !== "apx-00aee28eb6");
+	check("T5-C5: never says 'for each tool call'", !ANALYTICS_DISCLOSURE.includes("for each tool call"));
+	// T5-C1: each named field -> the emitted key(s) carrying it; the union of every
+	// non-$ key across the four LIVE events must be covered, and every mapped key emitted.
 	const NAMED = {
-		"the tool name": "tool",
-		"the client application's name and version": ["client_name", "client_version"],
-		"the transport": "transport",
-		"the outcome": "outcome",
-		"any error code": "error_code",
-		"the HTTP status": "http_status",
-		"the response time": "latency_ms",
-		"the server version": "server_version",
+		"the event type": ["event"],
+		"which endpoint was used": ["surface", "transport"],
+		"the directory link the client came from": ["src"],
+		"the tool name": ["tool"],
+		"the client application's family and version": ["client_family", "client_name", "client_version"],
+		"the MCP protocol version": ["protocol_version"],
+		"the outcome": ["outcome"],
+		"any error code": ["error_code"],
+		"the HTTP status": ["http_status"],
+		"the response time": ["latency_ms"],
+		"the server version": ["server_version"],
 	};
-	const c = toCapture({ ts: "t", event: "public_request", tool: "get_news", status: 200, outcome: "ok", error_code: null, ms: 1, client_name: "node", client_version: "1" }, { apiKey: KEY, serverVersion: "0.1.0" });
+	const CFGX = { apiKey: KEY, serverVersion: "0.2.0" };
+	const ts = "2026-10-19T21:00:00.000Z";
+	const caps = [
+		...toCaptures({ ts, event: "public_request", rpc: ["initialize"], status: 200, outcome: "ok", client_name: "node", client_version: "1", protocol_version: "2025-06-18", src: "glama" }, CFGX),
+		...toCaptures({ ts, event: "public_request", rpc: ["tools/list"], status: 200, outcome: "ok", client_name: "node" }, CFGX),
+		...toCaptures({ ts, event: "public_request", rpc: ["tools/call"], tool: "get_news", status: 200, outcome: "ok", error_code: null, ms: 1, client_name: "node", client_version: "1" }, CFGX),
+		...toCaptures({ ts, event: "request", outcome: "missing_credential", status: 401 }, CFGX),
+	];
+	const events = new Set(caps.map((c) => c.event));
+	check("the four live events are all exercised", ["mcp_initialize", "mcp_tools_list", "mcp_tool_call", "mcp_auth_failure"].every((e) => events.has(e)), [...events].join(","));
+	const emitted = new Set(["event", ...caps.flatMap((c) => Object.keys(c.properties).filter((k) => !k.startsWith("$")))]);
 	const covered = new Set(Object.values(NAMED).flat());
 	check("every field the disclosure names is in the text", Object.keys(NAMED).every((p) => ANALYTICS_DISCLOSURE.includes(p)));
-	check("every named field is a capture key", [...covered].every((k) => k in c.properties));
-	// surface and src (listing review F-1, 2026-10-19) are NOT in T5-S1 yet: legal review must re-certify
-	// the disclosure before COMMERTIZE_MCP_ANALYTICS=1. Named here so the gap is explicit;
-	// any OTHER uncovered key still fails.
-	const PENDING_RECERT = new Set(["surface", "src"]);
-	const nonPrivate = Object.keys(c.properties).filter((k) => !k.startsWith("$") && !PENDING_RECERT.has(k));
-	check("every non-$ capture key is named by the disclosure", nonPrivate.every((k) => covered.has(k)), nonPrivate.filter((k) => !covered.has(k)).join(","));
+	check("every named field maps to an emitted key", [...covered].every((k) => emitted.has(k)), [...covered].filter((k) => !emitted.has(k)).join(","));
+	check("every emitted non-$ key is named by the disclosure", [...emitted].every((k) => covered.has(k)), [...emitted].filter((k) => !covered.has(k)).join(","));
 	const readme = await readFile(path.join(HERE, "..", "README.md"), "utf8");
 	check("not in the README while the flag is off by default (ships with the flag)", !readme.includes(ANALYTICS_DISCLOSURE));
 }

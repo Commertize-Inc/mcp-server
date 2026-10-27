@@ -13,7 +13,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { config } from "./config.js";
 import { registerInquiryTool } from "./inquiryTool.js";
 import { registerPlatformTools } from "./platformTools.js";
-import { envelopeSdkToolErrors } from "./publicSurface.js";
+import { envelopeSdkToolErrors, type PublicErrorDetail } from "./publicSurface.js";
 import { registerSandboxTools } from "./sandboxTools.js";
 import { registerScreenerTools } from "./screenerTools.js";
 import { registerX402Tools } from "./x402Tools.js";
@@ -34,7 +34,7 @@ import {
  */
 export const createServer = (
 	surface: ToolSurface = "stdio",
-	onToolResult?: (tool: string, r: CallToolResult) => void
+	onToolResult?: (tool: string, r: CallToolResult, d?: PublicErrorDetail) => void
 ): McpServer => {
 	/*
 	 * The no-login public surface (`/mcp/public`, publicSurface.ts): the three
@@ -42,7 +42,15 @@ export const createServer = (
 	 * the server-wide one describes offering data this surface never serves,
 	 * and new copy for it waits on certification.
 	 */
-	if (surface === "public") {
+	/*
+	 * security review F3-1: the DEFAULT stdio build is the public three too. A directory
+	 * that installs and introspects this server would otherwise re-list tools
+	 * that are closed to anonymous readers, and the README documents three.
+	 * The gated set needs COMMERTIZE_MCP_ENABLE_GATED_TOOLS exactly "1"
+	 * (config.ts); each gated tool still has its own gate on top.
+	 */
+	const publicOnly = surface === "public" || (surface === "stdio" && !config.gatedToolsEnabled);
+	if (publicOnly) {
 		const pub = new McpServer(
 			{ name: "commertize", version: "0.2.0" },
 			{ capabilities: { tools: {} } }

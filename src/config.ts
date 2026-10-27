@@ -13,6 +13,17 @@ const int = (raw: string | undefined, fallback: number): number => {
 	return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
 };
 
+/**
+ * The `/mcp/public` gate, as a pure function so every value is testable.
+ * ENABLE must be exactly "1". The kill switch DISABLE closes on ANY non-empty
+ * value except "0" (security review L4-2): an operator who types "true", "yes" or
+ * "1 " under pressure gets a closed endpoint, never a silently open one.
+ */
+export const publicDisabledFrom = (env: Record<string, string | undefined>): boolean => {
+	const kill = env.COMMERTIZE_MCP_DISABLE_PUBLIC ?? "";
+	return (kill !== "" && kill !== "0") || env.COMMERTIZE_MCP_ENABLE_PUBLIC !== "1";
+};
+
 export const config = {
 	/** Base URL of the Commertize public API. */
 	apiBaseUrl: (
@@ -248,12 +259,18 @@ export const config = {
 	 * Gate for the NO-LOGIN public endpoint `POST /mcp/public`
 	 * (publicSurface.ts, httpPublic.ts). Default CLOSED: unset, empty, "true"
 	 * or anything but the exact string "1" answers 404, as does the kill switch
-	 * `COMMERTIZE_MCP_DISABLE_PUBLIC=1` whatever ENABLE says. The keyed `/mcp`
+	 * `COMMERTIZE_MCP_DISABLE_PUBLIC` set to any non-empty value but "0",
+	 * whatever ENABLE says (`publicDisabledFrom` above). The keyed `/mcp`
 	 * is unaffected either way.
 	 */
-	publicDisabled:
-		process.env.COMMERTIZE_MCP_DISABLE_PUBLIC === "1" ||
-		process.env.COMMERTIZE_MCP_ENABLE_PUBLIC !== "1",
+	publicDisabled: publicDisabledFrom(process.env),
+
+	/**
+	 * security review F3-1: the stdio build (index.ts, what a directory introspects)
+	 * registers ONLY the public three unless this is exactly "1". Every other
+	 * value, including unset, "true" and "1 ", keeps the gated set off.
+	 */
+	gatedToolsEnabled: process.env.COMMERTIZE_MCP_ENABLE_GATED_TOOLS === "1",
 
 	/**
 	 * Per-client-IP ceiling on JSON-RPC requests to `/mcp/public` (fixed

@@ -407,6 +407,22 @@ export const registerTools = (
 					.describe(
 						"Case-insensitive substring filter over title and summary. Applied locally to the fetched set, not a search index."
 					),
+				class: z
+					.string()
+					.regex(/^[a-z_]{1,40}$/)
+					.optional()
+					.describe(
+						"Asset-class slug, matched against each article's tags: cre, private_equity, private_credit, oil_gas, solar_storage, data_centers, gpu_compute, farmland, sports, music_ip, mining, luxury. An unknown slug is an error from the API, not an empty list."
+					),
+				since: z
+					.string()
+					.refine((s) => !Number.isNaN(Date.parse(s)), {
+						message: "since must be an ISO 8601 date",
+					})
+					.optional()
+					.describe(
+						'Only articles published at or after this ISO 8601 date or timestamp, e.g. "2026-10-01".'
+					),
 			},
 			outputSchema: {
 				...envelopeShape,
@@ -418,11 +434,30 @@ export const registerTools = (
 		async (args) => {
 			const empty = { articles: [], count: 0 };
 			const limit = args.limit ?? 20;
-			const pathname = `/api/news?limit=${limit}`;
+			const qs = new URLSearchParams({ limit: String(limit) });
+			if (args.class) qs.set("class", args.class);
+			if (args.since) qs.set("since", args.since);
+			const pathname = `/api/news?${qs.toString()}`;
 			try {
 				const res = await getJson<{ data?: RawArticle[] }>(pathname);
 				const raw = Array.isArray(res.body?.data) ? res.body.data : [];
 				let articles = raw.map(normalizeArticleSummary);
+
+				// The API filters both; these re-check the rows it returned. An
+				// upstream that ignores the parameters (one deployed before it
+				// learned them) then yields an honest empty list, never an
+				// unfiltered one presented as filtered.
+				if (args.class) {
+					const want = args.class;
+					articles = articles.filter((a) => a.tags.includes(want));
+				}
+				if (args.since) {
+					const floor = Date.parse(args.since);
+					articles = articles.filter((a) => {
+						const t = a.published_at ? Date.parse(a.published_at) : NaN;
+						return !Number.isNaN(t) && t >= floor;
+					});
+				}
 
 				if (args.category) {
 					const want = args.category.toLowerCase();

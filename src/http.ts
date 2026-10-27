@@ -74,6 +74,9 @@ const inFlight = new Map<string, Promise<CacheEntry>>();
 const NOT_FOUND_MAX = 1000;
 const notFound = new Map<string, { err: ApiError; at: number }>();
 
+/** Test seam: how many bodies the positive cache holds. */
+export const cacheSize = (): number => cache.size;
+
 /** Test seam: drop all cached bodies. */
 export const clearCache = (): void => {
 	cache.clear();
@@ -152,6 +155,8 @@ export const getJson = async <T>(path: string): Promise<ApiResult<T>> => {
 	const cached = cache.get(url);
 
 	if (cached && Date.now() - cached.fetchedAt < config.cacheTtlMs) {
+		cache.delete(url);
+		cache.set(url, cached);
 		return {
 			body: cached.body as T,
 			fetchedAt: new Date(cached.fetchedAt),
@@ -174,7 +179,15 @@ export const getJson = async <T>(path: string): Promise<ApiResult<T>> => {
 
 	try {
 		const entry = await pending;
+		// LRU: re-insert so the newest key is last, then evict from the front.
+		// The keys carry caller-chosen query strings, so the map is bounded.
+		cache.delete(url);
 		cache.set(url, entry);
+		while (cache.size > config.cacheMaxEntries) {
+			const oldest = cache.keys().next().value;
+			if (oldest === undefined) break;
+			cache.delete(oldest);
+		}
 		return {
 			body: entry.body as T,
 			fetchedAt: new Date(entry.fetchedAt),

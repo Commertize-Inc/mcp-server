@@ -288,7 +288,7 @@ export const createPublicHttpHandler = (o: PublicHandlerOptions): NodeHandler =>
  * means 404, so the document never advertises an endpoint that answers 404.
  * The keyed `/mcp` is left out on purpose (a directory reader cannot obtain a
  * key). The summary and description strings are legal review-certified L7a-e
- * (CERT_mcp_directory_listings_2026-10-19); public-hardening.mjs pins the
+ * (directory listings review, 2026-10-19); public-hardening.mjs pins the
  * bytes, and info.version pins to package.json. Changing one needs a re-cert.
  */
 export const OPENAPI_PATH = "/openapi.json";

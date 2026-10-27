@@ -1,5 +1,5 @@
 /**
- * Wording guard (legal review CERT_agent_surface_wording_2026-10-16).
+ * Wording guard (legal review of the agent-surface wording, 2026-10-16).
  *
  * Fails if "verified", "verify", "verification", "vetted" or "audited" appears
  * in any user-facing string: README, package.json description, the skill and

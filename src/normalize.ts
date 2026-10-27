@@ -45,7 +45,7 @@ const titleCase = (code: string): string =>
 		.join(" ");
 
 /* ------------------------------------------------------------------ */
-/* label maps (mirror packages/data/src/enums/entities.ts)             */
+/* label maps (mirror the platform entity enums)                         */
 /* ------------------------------------------------------------------ */
 
 const OFFERING_LABELS: Record<string, string> = {

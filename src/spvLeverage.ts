@@ -1,6 +1,6 @@
 /**
  * SPV leverage disclosure — a local mirror of
- * `packages/data/src/utils/spvLeverage.ts` in the Commertize monorepo
+ * the matching helper in the Commertize platform code
  * (kept in step with the platform implementation).
  *
  * Kept byte-for-byte equivalent in behaviour so this server can never render

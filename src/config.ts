@@ -44,6 +44,9 @@ export const config = {
 	/** Fresh-response window. Repeat calls inside it never touch the API. */
 	cacheTtlMs: int(process.env.COMMERTIZE_CACHE_TTL_MS, 60_000),
 
+	/** Most bodies the response cache holds; least recently used is evicted first. */
+	cacheMaxEntries: int(process.env.COMMERTIZE_CACHE_MAX_ENTRIES, 500),
+
 	/**
 	 * How long a cached body may still be served after the API starts
 	 * failing. Serving stale beats serving nothing, but it is always

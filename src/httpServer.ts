@@ -105,7 +105,7 @@ const rpcError = (id: unknown, code: number, message: string) => ({
  * or larger, so a full IPv6 address is not a stable client identity: one
  * host can rotate through 2^64 of them and get a fresh brake bucket each
  * time. IPv4 and IPv4-mapped forms pass through. Mirrors the backend's
- * `toBucketKey` (apps/backend/src/utils/clientIp.ts) line for line, so both
+ * `toBucketKey` in the Commertize API line for line, so both
  * brakes bucket one client the same way.
  */
 export const toBucketKey = (ip: string): string => {

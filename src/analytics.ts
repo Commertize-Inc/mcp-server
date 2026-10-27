@@ -24,7 +24,7 @@ import { PUBLIC_TOOL_SET } from "./publicSurface.js";
 
 /**
  * T5-S1 r2, the user-facing disclosure, legal review-certified apx-de218a8e27
- * (CERT_mcp_directory_listings_2026-10-19 A-9; apx-00aee28eb6 is WITHDRAWN).
+ * (directory listings review 2026-10-19, item A-9; apx-00aee28eb6 is withdrawn).
  * It describes what `toCaptures` sends across the four live events. It goes
  * into the README in the SAME change that sets COMMERTIZE_MCP_ANALYTICS=1 in
  * production, never before (T5-C2). `x402_payment` is deliberately not

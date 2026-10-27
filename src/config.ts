@@ -258,6 +258,18 @@ export const config = {
 	 * own per-IP limit (120/min) is the floor behind it, and the 60 s response
 	 * cache means repeat reads cost no upstream call.
 	 */
+	/**
+	 * PostHog analytics for `/mcp/public` (analytics.ts), raw values only; the
+	 * fail-closed parse lives in `analyticsConfigFrom`. Off unless
+	 * COMMERTIZE_MCP_ANALYTICS is exactly "1" AND the key is a well-formed
+	 * `phc_` project key AND the host is https.
+	 */
+	analyticsEnv: {
+		COMMERTIZE_MCP_ANALYTICS: process.env.COMMERTIZE_MCP_ANALYTICS,
+		COMMERTIZE_MCP_POSTHOG_KEY: process.env.COMMERTIZE_MCP_POSTHOG_KEY,
+		COMMERTIZE_MCP_POSTHOG_HOST: process.env.COMMERTIZE_MCP_POSTHOG_HOST,
+	},
+
 	publicRequestsPerIpPerMinute: int(
 		process.env.COMMERTIZE_MCP_PUBLIC_RPM_PER_IP,
 		30

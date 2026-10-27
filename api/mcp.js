@@ -4,6 +4,8 @@
 import { handler } from "../dist/httpEntry.js";
 
 export default function mcp(req, res) {
-	req.url = "/mcp";
+	// Keep the query (`?src=` directory attribution, analytics.ts); the path stays pinned.
+	const q = (req.url ?? "").indexOf("?");
+	req.url = "/mcp" + (q >= 0 ? req.url.slice(q) : "");
 	return handler(req, res);
 }

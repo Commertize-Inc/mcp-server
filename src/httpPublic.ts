@@ -27,9 +27,12 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+
+import { protocolVersionOf, srcOf, uaProductOf } from "./analytics.js";
 import type { FixedWindowLimiter } from "./httpRateLimit.js";
 import { clientIpOf, type HttpLogEvent, type NodeHandler } from "./httpServer.js";
-import { clientNameOf, isPublicTool } from "./publicSurface.js";
+import { clientNameOf, clientVersionOf, isPublicTool } from "./publicSurface.js";
 
 export const PUBLIC_PATH = "/mcp/public";
 
@@ -37,7 +40,13 @@ export interface PublicHandlerOptions {
 	/** False = 404 for every request. Read per request (the kill switch). */
 	enabled: () => boolean;
 	ipLimiter: FixedWindowLimiter;
-	createServer: () => McpServer;
+	/** Builds a public-surface server; `onToolResult` sees each tool result. */
+	createServer: (onToolResult?: (tool: string, r: CallToolResult) => void) => McpServer;
+	/**
+	 * Awaited AFTER the response is written and the event logged (analytics).
+	 * Never allowed to throw into the request.
+	 */
+	afterResponse?: (e: HttpLogEvent) => Promise<void>;
 	log: (e: HttpLogEvent) => void;
 	maxBodyBytes: number;
 	now?: () => number;
@@ -86,7 +95,15 @@ export const createPublicHttpHandler = (o: PublicHandlerOptions): NodeHandler =>
 		const method = (req.method ?? "GET").toUpperCase();
 		let rpc: string[] = [];
 		let tool: string | null = null;
-		let client: string | null = null;
+		// Client family: the first User-Agent product token, replaced by
+		// `initialize` clientInfo when the request carries one. Sanitised both ways.
+		const ua = uaProductOf(req.headers["user-agent"]);
+		let clientName: string = ua.name;
+		let clientVersion: string | null = ua.version;
+		let errorCode: string | null = null;
+		let protocolVersion: unknown = undefined;
+		// Directory attribution from `?src=`, a closed set (analytics.ts srcOf).
+		const src = srcOf(req.url);
 		let outcome = "unhandled";
 
 		const send = (status: number, body: unknown, extra: Record<string, string> = {}): void => {
@@ -147,10 +164,12 @@ export const createPublicHttpHandler = (o: PublicHandlerOptions): NodeHandler =>
 				const msg = m as {
 					method?: unknown;
 					id?: unknown;
-					params?: { name?: unknown; clientInfo?: { name?: unknown } };
+					params?: { name?: unknown; clientInfo?: { name?: unknown; version?: unknown }; protocolVersion?: unknown };
 				};
 				if (msg.method === "initialize") {
-					client = clientNameOf(msg.params?.clientInfo?.name);
+					clientName = clientNameOf(msg.params?.clientInfo?.name);
+					clientVersion = clientVersionOf(msg.params?.clientInfo?.version);
+					protocolVersion = protocolVersionOf(msg.params?.protocolVersion);
 				}
 				if (msg.method !== "tools/call") continue;
 				const name = msg.params?.name;
@@ -177,7 +196,11 @@ export const createPublicHttpHandler = (o: PublicHandlerOptions): NodeHandler =>
 				return;
 			}
 
-			const server = o.createServer();
+			const server = o.createServer((_tool, r) => {
+				// Only the envelope's own machine code, never its message.
+				const code = (r.structuredContent as { error?: { code?: unknown } } | undefined)?.error?.code;
+				if (r.isError) errorCode = typeof code === "string" && /^[A-Z_]{1,40}$/.test(code) ? code : "TOOL_ERROR";
+			});
 			const transport = new StreamableHTTPServerTransport({
 				sessionIdGenerator: undefined,
 				enableJsonResponse: true,
@@ -198,18 +221,30 @@ export const createPublicHttpHandler = (o: PublicHandlerOptions): NodeHandler =>
 			});
 			if (!res.headersSent) send(500, { error: "internal_error" });
 		} finally {
-			o.log({
+			const evt: HttpLogEvent = {
 				ts: new Date(now()).toISOString(),
 				event: "public_request",
 				method,
 				path,
 				rpc,
 				tool,
-				client,
+				client_name: clientName,
+				client_version: clientVersion,
+				protocol_version: protocolVersion,
+				src,
 				status: res.statusCode,
 				outcome,
+				error_code: errorCode,
 				ms: now() - started,
-			});
+			};
+			o.log(evt);
+			if (o.afterResponse) {
+				try {
+					await o.afterResponse(evt);
+				} catch {
+					/* analytics never reaches the request */
+				}
+			}
 		}
 	};
 };

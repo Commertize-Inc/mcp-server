@@ -2,7 +2,7 @@
  * Bearer-key authentication for the HTTP transport.
  *
  * The key format mirrors the backend's agent-platform keys EXACTLY
- * (`apps/backend/src/agentPlatform/keys.ts`): `cfa_<16 hex>_<43 base64url>`.
+ * (the Commertize API key format): `cfa_<16 hex>_<43 base64url>`.
  * The shape check is anchored and exact-length, so a string that is not a key
  * we minted is refused here and costs no upstream call.
  *
@@ -104,12 +104,12 @@ const REFUSALS: Record<RefusalCode, { status: 401 | 503; message: string }> = {
 	verifier_unavailable: {
 		status: 503,
 		message:
-			"The key could not be verified right now. Nothing was done; retry later.",
+			"The key could not be checked right now. Nothing was done; retry later.",
 	},
 	verifier_not_configured: {
 		status: 503,
 		message:
-			"This server cannot verify keys right now. Nothing was done; retry later.",
+			"This server cannot check keys right now. Nothing was done; retry later.",
 	},
 };
 

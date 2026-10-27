@@ -98,7 +98,7 @@ const rpcError = (id: unknown, code: number, message: string) => ({
  * or larger, so a full IPv6 address is not a stable client identity: one
  * host can rotate through 2^64 of them and get a fresh brake bucket each
  * time. IPv4 and IPv4-mapped forms pass through. Mirrors the backend's
- * `toBucketKey` (apps/backend/src/utils/clientIp.ts) line for line, so both
+ * `toBucketKey` in the Commertize API line for line, so both
  * brakes bucket one client the same way.
  */
 export const toBucketKey = (ip: string): string => {
@@ -118,7 +118,7 @@ export const toBucketKey = (ip: string): string => {
 
 /**
  * The client's address for the verification brake. Vercel sets
- * `x-vercel-forwarded-for` at its edge and strips it from inbound traffic;
+ * `x-vercel-forwarded-for` at its proxy and strips it from inbound traffic;
  * `x-real-ip` is the Node runtime's; the socket is the local case. The raw
  * `x-forwarded-for` is caller-settable and is NOT consulted. No address at
  * all shares one bucket, which brakes harder, never softer. IPv6 is bucketed
@@ -207,7 +207,7 @@ export const createHttpHandler = (o: HttpHandlerOptions): NodeHandler => {
 						429,
 						{
 							error: "rate_limited",
-							message: `Too many key verifications from this client. Retry after ${brake.retryAfterSeconds}s.`,
+							message: `Too many key checks from this client. Retry after ${brake.retryAfterSeconds}s.`,
 						},
 						{ "retry-after": String(brake.retryAfterSeconds) }
 					);

@@ -112,9 +112,9 @@ section("relays a served package with its signature");
 	check("signature.sha256", payload.signature?.sha256 === SIGNATURE.sha256);
 	check("signature.value", payload.signature?.value === SIGNATURE.value);
 	check(
-		"verify endpoints relayed",
-		payload.verify?.keys_url.endsWith("/api/agents/signing/keys") &&
-			payload.verify?.verify_url.endsWith("/api/agents/signing/verify")
+		"signature-check endpoints relayed",
+		payload.signature_check?.keys_url.endsWith("/api/agents/signing/keys") &&
+			payload.signature_check?.check_url.endsWith("/api/agents/signing/verify")
 	);
 	check("pdf url relayed", payload.pdf_url?.endsWith("/disclosure.pdf"));
 	check(

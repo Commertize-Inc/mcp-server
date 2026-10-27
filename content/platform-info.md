@@ -1,12 +1,11 @@
 # Commertize — platform information for AI agents
 
 _Curated reference text served by the `platform_info` tool. Static, human-maintained,
-and deliberately conservative: if a claim cannot be verified from the product, it is
-not in this file._
+and deliberately conservative: if a claim cannot be confirmed from the product, it is not in this file._
 
 ## What Commertize is
 
-Commertize is a digital capital markets platform for real-world assets. Sponsors list offerings on it, and investors complete identity verification on the platform before they can take part.
+Commertize is a digital capital markets platform for real-world assets. Sponsors list offerings on it, and investors complete the platform's identity (KYC) checks, and accreditation checks where the offering's exemption requires them, before they can take part.
 
 Tokenization is one layer of that stack, not the product. The product is the
 infrastructure a private offering needs: an on-chain register, investor
@@ -38,8 +37,7 @@ Commertize does not pool assets across listings.
 - Each distribution the issuer declares is calculated and recorded per holder. Frequency
   and waterfall terms are set per offering and are disclosed in that offering's
   documents.
-- A token moves only between wallets verified in the identity registry or exempted by
-  the platform; minting needs a verified or exempt receiver.
+- A token moves only between wallets registered in the identity registry or exempted by the platform; minting needs a registered or exempt receiver.
 
 ## Exemptions and who can participate
 
@@ -50,26 +48,23 @@ may participate and how an offering may be discussed:
 
 - **Rule 506(b)** permits no general solicitation. Participation requires a
   pre-existing substantive relationship with the issuer.
-- **Rule 506(c)** permits general solicitation, but every purchaser must be an
-  accredited investor whose status the issuer has taken reasonable steps to verify.
+- **Rule 506(c)** permits general solicitation, but every purchaser must be an accredited investor, and the issuer must take reasonable steps to confirm that status.
 
 Listing data exposed to agents is reference information for research. It is not an
 offer, not a solicitation, and not a recommendation.
 
-## How verification works
+## How onboarding checks work
 
-- **Investors** complete identity verification (KYC) and sanctions/AML screening
+- **Investors** complete identity checks (KYC) and sanctions/AML screening
   before they can subscribe. Accreditation status is established where the exemption
   requires it.
-- **Sponsors** complete business verification (KYB) covering the entity, its
+- **Sponsors** complete business checks (KYB) covering the entity, its
   beneficial owners, and its authority to make the offering, before a listing can go
   live.
-- Both flows run through Sumsub, the platform's identity provider. Verification
-  artefacts are held by the provider and the platform; they are never exposed through
+- Both flows run through Sumsub, the platform's identity provider. Onboarding records are held by the provider and the platform; they are never exposed through
   any public or agent-facing interface.
-- Verification attaches to a natural or legal person. An agent acting on someone's
-  behalf does not hold standing of its own; any agent-initiated action resolves
-  to a verified principal who authorised it.
+- Onboarding attaches to a natural or legal person. An agent acting on someone's
+  behalf does not hold standing of its own; any agent-initiated action resolves to an onboarded principal who authorised it.
 
 ## What agents can and cannot do
 

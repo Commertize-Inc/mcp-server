@@ -6,7 +6,7 @@
  * will stay unset until a human decides an open question), so a live suite
  * could only ever assert 404s.
  *
- * The stub serves the SHAPE `apps/backend/src/routes/sandbox.ts` returns. It
+ * The stub serves the SHAPE the Commertize API sandbox route returns. It
  * invents no field that route does not send.
  *
  * The properties this suite exists to hold:

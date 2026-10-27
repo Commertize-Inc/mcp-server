@@ -42,6 +42,7 @@ const SUITES = [
 	["client ip /64 bucketing (offline)", "client-ip.mjs", { live: false }],
 	["platform reads e2e (stub upstream)", "platform-reads-e2e.mjs", { live: false }],
 	["language", "language-check.mjs", { live: false }],
+	["wording guard (legal review 10-16)", "wording-guard.mjs", { live: false }],
 	["readme directory profile (offline)", "readme-profile.mjs", { live: false }],
 ];
 

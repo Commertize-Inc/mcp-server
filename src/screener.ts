@@ -29,11 +29,11 @@
  * ── Units are cited, not assumed ──────────────────────────────────────────
  * Because no live offering discloses any of these figures, the units cannot be
  * confirmed from data; they are taken from the platform's own committed
- * definitions (commertize.com @ 89614c3e):
- *   - `packages/data/src/entities/Listing.ts` — `derivedCapRate` is
+ * definitions (Commertize platform data model):
+ *   - the listing entity — `derivedCapRate` is
  *     `noi / (purchasePrice ?? acquisitionCost)` and `year1CashOnCash` is
  *     `(noi - interestRate * loanAmount) / equityRequired`: both fractions.
- *   - `packages/data/src/schemas/property.ts` — `targetIRR`, `preferredReturn`,
+ *   - the property schema — `targetIRR`, `preferredReturn`,
  *     `targetCoCYear1` are validated `.min(0).max(1)` (fractions);
  *     `targetEquityMultiple` is `.min(1)` (a multiple, not a fraction);
  *     `holdPeriodYears` is `.int().min(1)` (years); `lockupMonths` is
@@ -633,7 +633,7 @@ export const SPONSOR_NOT_AVAILABLE: readonly string[] = [
 	"assets_under_management",
 	"principals",
 	"years_in_business",
-	"sponsor_verification_status",
+	"sponsor_onboarding_status",
 	"contact_details",
 ] as const;
 

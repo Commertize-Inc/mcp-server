@@ -104,12 +104,12 @@ const REFUSALS: Record<RefusalCode, { status: 401 | 503; message: string }> = {
 	verifier_unavailable: {
 		status: 503,
 		message:
-			"The key could not be verified right now. Nothing was done; retry later.",
+			"The key could not be checked right now. Nothing was done; retry later.",
 	},
 	verifier_not_configured: {
 		status: 503,
 		message:
-			"This server cannot verify keys right now. Nothing was done; retry later.",
+			"This server cannot check keys right now. Nothing was done; retry later.",
 	},
 };
 

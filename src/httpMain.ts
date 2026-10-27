@@ -4,10 +4,10 @@
  *
  *   node dist/httpMain.js
  *
- * Binds 127.0.0.1:3920 unless COMMERTIZE_MCP_HTTP_HOST / _PORT say otherwise.
+ * Binds the loopback interface on port 3920 unless COMMERTIZE_MCP_HTTP_HOST / _PORT say otherwise.
  * Every request needs `Authorization: Bearer cfa_…`, verified against the API
  * named by COMMERTIZE_API_BASE_URL (see httpAuth.ts). There is no anonymous
- * mode and no "skip verification" switch.
+ * mode and no "skip the key check" switch.
  */
 
 import { createServer as createNodeServer } from "node:http";

@@ -467,7 +467,7 @@ export const registerScreenerTools = (server: McpServer): void => {
 		{
 			title: "Get one Commertize sponsor",
 			description:
-				"One sponsor's public record, by id or by name substring: which offerings they have listed on Commertize, broken down by status, asset class and geography. NOT A TRACK RECORD — Commertize's sponsor endpoint is authenticated, so no prior deals, realized returns, AUM, principals or verification status are available through this server, and the response names each of those absences explicitly rather than omitting them. Informational reference data — not an offer, solicitation, or recommendation.",
+				"One sponsor's public record, by id or by name substring: which offerings they have listed on Commertize, broken down by status, asset class and geography. NOT A TRACK RECORD — Commertize's sponsor endpoint is authenticated, so no prior deals, realized returns, AUM, principals or onboarding status are available through this server, and the response names each of those absences explicitly rather than omitting them. Informational reference data — not an offer, solicitation, or recommendation.",
 			inputSchema: {
 				sponsor: z
 					.string()

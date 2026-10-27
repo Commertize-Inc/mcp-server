@@ -219,7 +219,7 @@ export const registerX402Tools = (server: McpServer): void => {
 				text: z.string().nullable(),
 				declared_version: z.string().nullable(),
 				declared_sha256: z.string().nullable(),
-				verify: z.string(),
+				how_to_check: z.string(),
 			},
 			annotations: { readOnlyHint: true, openWorldHint: true },
 		},
@@ -235,7 +235,7 @@ export const registerX402Tools = (server: McpServer): void => {
 				if (res.status !== 200) {
 					return envelope(res.sourceUrl, {
 						...empty,
-						verify:
+						how_to_check:
 							"This deployment publishes no per-call purchase terms, so it sells nothing per call.",
 					});
 				}
@@ -246,13 +246,13 @@ export const registerX402Tools = (server: McpServer): void => {
 					// does not trust this server.
 					declared_version: null,
 					declared_sha256: null,
-					verify:
+					how_to_check:
 						"Hash these exact bytes with SHA-256 and compare to terms_hash in the payment-required response. This server does not compute the hash for you: a hash produced by the same process that served the bytes is not evidence.",
 				});
 			} catch (err) {
 				return fail(err, `${config.apiBaseUrl}${path}`, {
 					...empty,
-					verify: "",
+					how_to_check: "",
 				});
 			}
 		},

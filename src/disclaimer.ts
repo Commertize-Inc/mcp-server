@@ -5,7 +5,7 @@
  * language test asserts the four load-bearing clauses are still present.
  */
 export const DISCLAIMER =
-	"Informational only. Securities are offered under Regulation D to verified investors. " +
+	"Informational only. Securities are offered under Regulation D only to investors who complete the platform's identity (KYC) checks and, where the exemption requires it, accreditation checks.  " +
 	"Nothing provided by this server is an offer to sell or a solicitation of an offer to buy " +
 	"any security, and nothing here is investment, legal, or tax advice or a recommendation. " +
 	"Agent access is informational; it confers no authority to transact. " +
@@ -17,7 +17,7 @@ export const DISCLAIMER =
  */
 export const PROJECTION_NOTE =
 	"Sponsor-supplied projections. Projections are estimates, not statements of fact, " +
-	"and may not be achieved. Verify against the offering documents.";
+	"and may not be achieved. Check them against the offering documents.";
 
 /**
  * Attached to Rule 506(b) offerings. 506(b) prohibits general solicitation;
@@ -26,4 +26,4 @@ export const PROJECTION_NOTE =
 export const RULE_506B_NOTE =
 	"This offering is structured under Rule 506(b), which does not permit general solicitation. " +
 	"This record is informational reference data, not an offer, and participation requires an " +
-	"existing relationship plus investor verification.";
+	"existing relationship plus completion of the platform's investor onboarding checks.";

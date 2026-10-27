@@ -37,6 +37,7 @@ import {
 } from "./sandboxTools.js";
 import { SCREENER_TOOL_NAMES } from "./screenerTools.js";
 import { X402_TOOL_NAMES } from "./x402Tools.js";
+import { DATA_PRODUCT_TOOL_NAMES } from "./dataProductTools.js";
 import { HTTP_TOOL_ALLOWLIST } from "./httpAllowlist.js";
 import { INQUIRY_TOOL_NAME } from "./inquiryTool.js";
 import {
@@ -575,6 +576,9 @@ export const registerTools = (
 				// it spends the caller's own money on-chain — which is the fact a
 				// client deciding whether to ask first actually needs.
 				...(config.x402Disabled ? [] : ["x402_fetch"]),
+				// With a payment_signature it spends the caller's own money, the
+				// same fact as x402_fetch.
+				...(config.dataProductsDisabled ? [] : ["get_supplier_profile"]),
 			]);
 			const capabilities = {
 				// Derived, never asserted: with every write gate closed this server
@@ -608,6 +612,7 @@ export const registerTools = (
 					// `registerSandboxTools` returns on. One predicate, two readers.
 					...(config.sandboxDisabled ? [] : SANDBOX_TOOL_NAMES),
 					...(config.x402Disabled ? [] : X402_TOOL_NAMES),
+					...(config.dataProductsDisabled ? [] : DATA_PRODUCT_TOOL_NAMES),
 				]),
 			};
 			const file = path.join(CONTENT_DIR, "platform-info.md");

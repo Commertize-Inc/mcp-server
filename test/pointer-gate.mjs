@@ -232,5 +232,19 @@ section("C. production wiring: the keyed handler follows the public gate");
 	}
 }
 
+section("D. /health reports which endpoints accept tool calls, from the same gate");
+{
+	publicOpen = true;
+	const open = await req("/health?v=missing", { method: "GET" });
+	check("open: toolCalls['/mcp/public'] is true", open.json?.toolCalls?.["/mcp/public"] === true, JSON.stringify(open.json?.toolCalls));
+	check("open: toolCalls['/mcp'] is true with a configured verifier", open.json?.toolCalls?.["/mcp"] === true);
+	publicOpen = false;
+	const closed = await req("/health?v=missing", { method: "GET" });
+	check("closed: toolCalls['/mcp/public'] is false", closed.json?.toolCalls?.["/mcp/public"] === false);
+	const unconf = await req("/health?v=notConfigured", { method: "GET" });
+	check("no verifier: toolCalls['/mcp'] is false", unconf.json?.toolCalls?.["/mcp"] === false);
+	publicOpen = true;
+}
+
 await new Promise((r) => http.close(r));
 process.exit(summary("pointer gate") === 0 ? 0 : 1);

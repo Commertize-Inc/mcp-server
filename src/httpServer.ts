@@ -196,6 +196,13 @@ export const createHttpHandler = (o: HttpHandlerOptions): NodeHandler => {
 					endpoint: "/mcp",
 					auth: "bearer-agent-key",
 					verifier_configured: o.verifier.configured,
+					// Which endpoints accept tool calls right now. Read from the same
+					// gate the refusals use, so /health cannot claim an open public
+					// endpoint that refuses calls (or the reverse).
+					toolCalls: {
+						"/mcp": o.verifier.configured,
+						"/mcp/public": o.publicOpen?.() === true,
+					},
 				});
 				return;
 			}

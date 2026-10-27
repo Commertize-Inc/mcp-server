@@ -1,15 +1,16 @@
 /**
- * Product analytics for the hosted public endpoint (`/mcp/public`), to
- * PostHog. OFF unless BOTH `COMMERTIZE_MCP_ANALYTICS=1` and a PostHog project
- * key (`phc_…`) are set.
+ * Product analytics for the hosted HTTP endpoints (`/mcp/public` and the
+ * keyed `/mcp`), to PostHog. OFF unless BOTH `COMMERTIZE_MCP_ANALYTICS=1` and
+ * a PostHog project key (`phc_…`) are set.
  *
  * Scope, stated so nobody over-reads it:
- *   - HTTP public surface only. The stdio server runs on a user's own machine
- *     and never phones home; this module is not imported by index.ts.
- *   - One event, `mcp_tool_call`, built from an EXPLICIT allowlist of
- *     properties: tool, transport, outcome, error_code, http_status,
- *     latency_ms, client_name, client_version, server_version. Nothing else
- *     from the log event can reach PostHog, whatever a future log adds.
+ *   - Hosted HTTP surfaces only. The stdio server runs on a user's own
+ *     machine and never phones home; index.ts does not import this module.
+ *   - Five event types (`EVENTS` below): mcp_initialize, mcp_tools_list,
+ *     mcp_tool_call, mcp_auth_failure (keyed only) and x402_payment (DARK, no
+ *     caller). Each is built from its own EXPLICIT allowlist of closed-set
+ *     properties. Nothing else from the log event can reach PostHog,
+ *     whatever a future log adds.
  *   - Anonymous: one constant distinct_id, no person profile, GeoIP off.
  *     Never a key, key id, IP, raw User-Agent, argument or result.
  *   - Best effort: a send that fails or exceeds its timeout is dropped and
@@ -19,22 +20,26 @@
 
 import { HTTP_TOOL_ALLOWLIST } from "./httpAllowlist.js";
 import type { HttpLogEvent } from "./httpServer.js";
+import { PUBLIC_TOOL_SET } from "./publicSurface.js";
 
 /**
- * T5-S1, the user-facing disclosure, legal review-certified apx-00aee28eb6 (ruling
- * 2026-10-15 §8). It describes what `toCapture` sends, field for field. It
- * goes into the README in the SAME change that sets COMMERTIZE_MCP_ANALYTICS=1
- * in production, never before: a README stating that the hosted endpoint
- * sends metrics while the flag is off would describe a feature we do not run.
- * analytics-e2e pins this text by id and pins that every field it names is a
- * key of the capture.
+ * T5-S1 r2, the user-facing disclosure, legal review-certified apx-de218a8e27
+ * (CERT_mcp_directory_listings_2026-10-19 A-9; apx-00aee28eb6 is WITHDRAWN).
+ * It describes what `toCaptures` sends across the four live events. It goes
+ * into the README in the SAME change that sets COMMERTIZE_MCP_ANALYTICS=1 in
+ * production, never before (T5-C2). `x402_payment` is deliberately not
+ * described: it has no caller, and going live needs a re-cert (T5-C3).
+ * analytics-e2e pins this text by id and pins that every field it names maps
+ * to an emitted key and every emitted key is named (T5-C1).
  */
 export const ANALYTICS_DISCLOSURE =
-	"The hosted endpoint sends anonymous usage metrics for each tool call to our analytics " +
-	"provider: the tool name, the client application's name and version, the transport, the " +
-	"outcome, any error code, the HTTP status, the response time and the server version. These " +
-	"metrics do not include your key, your IP address, the arguments you send or the data returned.";
-export const ANALYTICS_DISCLOSURE_ID = "apx-00aee28eb6";
+	"The hosted endpoints send anonymous usage metrics to our analytics provider when a client " +
+	"connects, lists the tools, calls a tool or is refused at the key check: the event type, which " +
+	"endpoint was used, the directory link the client came from, the tool name, the client " +
+	"application's family and version, the MCP protocol version, the outcome, any error code, the " +
+	"HTTP status, the response time and the server version. These metrics do not include your key, " +
+	"your IP address, the arguments you send or the data returned.";
+export const ANALYTICS_DISCLOSURE_ID = "apx-de218a8e27";
 
 export const ANALYTICS_EVENT = "mcp_tool_call";
 export const ANALYTICS_DISTINCT_ID = "commertize-mcp-server";
@@ -189,11 +194,23 @@ const PRIVACY = { $process_person_profile: false, $geoip_disable: true } as cons
 
 type Cfg = Pick<AnalyticsConfig, "apiKey" | "serverVersion">;
 
+/**
+ * security review L5-1: the capture `timestamp` leaves only as a canonical UTC ISO-8601
+ * instant (what `Date#toISOString` writes), and only if it round-trips.
+ * Anything else, free text included, is null.
+ */
+const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+const isoOrNull = (ts: unknown): string | null => {
+	if (typeof ts !== "string" || !ISO_UTC.test(ts)) return null;
+	const d = new Date(ts);
+	return Number.isFinite(d.getTime()) && d.toISOString() === ts ? ts : null;
+};
+
 const envelope = (cfg: Cfg, event: string, ts: unknown, properties: Record<string, unknown>) => ({
 	api_key: cfg.apiKey,
 	event,
 	distinct_id: ANALYTICS_DISTINCT_ID,
-	timestamp: typeof ts === "string" ? ts : null,
+	timestamp: isoOrNull(ts),
 	properties: { ...properties, ...PRIVACY },
 });
 
@@ -255,7 +272,9 @@ export const toCaptures = (e: HttpLogEvent, cfg: Cfg): Record<string, unknown>[]
 		);
 	}
 	if (typeof e.tool === "string" && e.tool !== "") {
-		const tool = surface === "public" || HTTP_TOOL_ALLOWLIST.has(e.tool) ? e.tool : "(refused)";
+		// security review L5-2: each surface's own closed set, the public one included.
+		const allowed = surface === "public" ? PUBLIC_TOOL_SET : HTTP_TOOL_ALLOWLIST;
+		const tool = allowed.has(e.tool) ? e.tool : "(refused)";
 		out.push(
 			envelope(cfg, EVENTS.toolCall, e.ts, {
 				tool,

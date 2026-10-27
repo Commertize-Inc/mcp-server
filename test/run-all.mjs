@@ -43,6 +43,7 @@ const SUITES = [
 	["platform reads e2e (stub upstream)", "platform-reads-e2e.mjs", { live: false }],
 	["public no-login endpoint e2e (stub upstream)", "public-e2e.mjs", { live: false }],
 	["public endpoint analytics (stub upstream)", "analytics-e2e.mjs", { live: false }],
+	["public hardening, pre-flag (stub upstream)", "public-hardening.mjs", { live: false }],
 	["language", "language-check.mjs", { live: false }],
 	["listing readiness (offline)", "listing-readiness.mjs", { live: false }],
 	["wording guard (legal review 10-16)", "wording-guard.mjs", { live: false }],

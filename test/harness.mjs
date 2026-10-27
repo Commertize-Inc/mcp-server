@@ -50,7 +50,10 @@ export const connect = async (env = {}) => {
 	const transport = new StdioClientTransport({
 		command: process.execPath,
 		args: [SERVER_ENTRY],
-		env: { ...process.env, ...env },
+		// security review F3-1: the default stdio build is the public three. These suites
+		// test the gated tools, so they opt in here, visibly; public-hardening
+		// H4 pins the default (no opt-in) separately. A caller may override it.
+		env: { COMMERTIZE_MCP_ENABLE_GATED_TOOLS: "1", ...process.env, ...env },
 		stderr: "pipe",
 	});
 	const client = new Client({ name: "commertize-mcp-test", version: "0.1.0" });

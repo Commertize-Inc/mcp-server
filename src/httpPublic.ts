@@ -32,16 +32,37 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { protocolVersionOf, srcOf, uaProductOf } from "./analytics.js";
 import type { FixedWindowLimiter } from "./httpRateLimit.js";
 import { clientIpOf, type HttpLogEvent, type NodeHandler } from "./httpServer.js";
-import { clientNameOf, clientVersionOf, isPublicTool } from "./publicSurface.js";
+import {
+	clientNameOf,
+	clientVersionOf,
+	isPublicTool,
+	type PublicErrorDetail,
+} from "./publicSurface.js";
 
 export const PUBLIC_PATH = "/mcp/public";
+
+/** The served version (package.json; `/openapi.json` info.version pins to it). */
+export const SERVER_VERSION = "0.2.0";
+
+/**
+ * security review L4-1, MCP Streamable HTTP transport: servers MUST validate `Origin`
+ * (DNS rebinding). A browser sends it; a server-to-server client usually does
+ * not. So: absent = allowed; present = allowed only on an exact match with
+ * the endpoint's own origin; anything else (another site, "null", a
+ * look-alike suffix, http) is 403 before the body is read.
+ */
+export const PUBLIC_ALLOWED_ORIGINS: ReadonlySet<string> = new Set(["https://agents.commertize.com"]);
+export const originAllowed = (raw: string | string[] | undefined): boolean =>
+	raw === undefined || (typeof raw === "string" && PUBLIC_ALLOWED_ORIGINS.has(raw));
 
 export interface PublicHandlerOptions {
 	/** False = 404 for every request. Read per request (the kill switch). */
 	enabled: () => boolean;
 	ipLimiter: FixedWindowLimiter;
 	/** Builds a public-surface server; `onToolResult` sees each tool result. */
-	createServer: (onToolResult?: (tool: string, r: CallToolResult) => void) => McpServer;
+	createServer: (
+		onToolResult?: (tool: string, r: CallToolResult, d?: PublicErrorDetail) => void
+	) => McpServer;
 	/**
 	 * Awaited AFTER the response is written and the event logged (analytics).
 	 * Never allowed to throw into the request.
@@ -122,6 +143,12 @@ export const createPublicHttpHandler = (o: PublicHandlerOptions): NodeHandler =>
 				send(405, { error: "method_not_allowed" }, { allow: "POST" });
 				return;
 			}
+			// The Origin value is caller-chosen text: never logged.
+			if (!originAllowed(req.headers.origin)) {
+				outcome = "origin_refused";
+				send(403, { error: "origin_not_allowed" });
+				return;
+			}
 
 			const limit = o.ipLimiter.hit(clientIpOf(req));
 			if (!limit.allowed) {
@@ -196,10 +223,21 @@ export const createPublicHttpHandler = (o: PublicHandlerOptions): NodeHandler =>
 				return;
 			}
 
-			const server = o.createServer((_tool, r) => {
+			const server = o.createServer((t, r, d) => {
 				// Only the envelope's own machine code, never its message.
 				const code = (r.structuredContent as { error?: { code?: unknown } } | undefined)?.error?.code;
 				if (r.isError) errorCode = typeof code === "string" && /^[A-Z_]{1,40}$/.test(code) ? code : "TOOL_ERROR";
+				// H1: the raw cause the client no longer sees, server-side only
+				// (never reaches analytics: toCaptures reads public_request only).
+				if (d) {
+					o.log({
+						ts: new Date(now()).toISOString(),
+						event: "public_tool_error",
+						tool: isPublicTool(t) ? t : "(sdk)",
+						code: d.code,
+						detail: d.detail,
+					});
+				}
 			});
 			const transport = new StreamableHTTPServerTransport({
 				sessionIdGenerator: undefined,
@@ -254,8 +292,9 @@ export const createPublicHttpHandler = (o: PublicHandlerOptions): NodeHandler =>
  * (listing review listing handoff 2026-10-19 F-2). Same gate as `/mcp/public`: closed
  * means 404, so the document never advertises an endpoint that answers 404.
  * The keyed `/mcp` is left out on purpose (a directory reader cannot obtain a
- * key). Summary strings are listing review's draft §7 and wait on legal review certification
- * before the gate opens.
+ * key). The summary and description strings are legal review-certified L7a-e
+ * (CERT_mcp_directory_listings_2026-10-19); public-hardening.mjs pins the
+ * bytes, and info.version pins to package.json. Changing one needs a re-cert.
  */
 export const OPENAPI_PATH = "/openapi.json";
 
@@ -263,7 +302,7 @@ export const OPENAPI_DOCUMENT = {
 	openapi: "3.1.0",
 	info: {
 		title: "Commertize Agents",
-		version: "0.1.0",
+		version: SERVER_VERSION,
 		description:
 			"MCP server for Commertize, the digital capital markets platform for real-world assets.",
 	},

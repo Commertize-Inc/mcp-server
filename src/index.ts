@@ -33,18 +33,12 @@ import {
 export const createServer = (surface: ToolSurface = "stdio"): McpServer => {
 	const server = new McpServer(
 		{ name: "commertize", version: "0.1.0" },
-		{
-			capabilities: { tools: {} },
-			instructions:
-				"Commertize is a digital capital markets platform for real-world assets. " +
-				"This server exposes PUBLIC, READ-ONLY marketplace data: offerings and their " +
-				"public terms, platform statistics, published news and commentary, and curated " +
-				"platform reference text. Call platform_info first if you are unfamiliar with " +
-				"the platform. Nothing here is an offer, a solicitation, or a recommendation, " +
-				"and no tool can transact or create an obligation. Every response carries an " +
-				"as_of timestamp, the upstream source URL, and a disclaimer — carry them into " +
-				"anything you report. Null means not disclosed; it never means zero.",
-		}
+		/*
+		 * No `instructions` string (AXIOM ruling 2026-10-15 F-B / R3-h): the
+		 * previous one described offering data and platform statistics this
+		 * server does not serve. Deleted; nothing replaces it until certified.
+		 */
+		{ capabilities: { tools: {} } }
 	);
 
 	registerTools(server, surface);

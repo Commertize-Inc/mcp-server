@@ -13,6 +13,8 @@
 		{ "source": "/mcp", "destination": "/api/mcp" },
 		{ "source": "/mcp/public", "destination": "/api/mcp-public" },
 		{ "source": "/openapi.json", "destination": "/api/openapi" },
+		{ "source": "/.well-known/agent-card.json", "destination": "/api/agent-card?p=card" },
+		{ "source": "/.well-known/agent.json", "destination": "/api/agent-card?p=legacy" },
 		{ "source": "/health", "destination": "/api/health" }
 	],
 	"headers": [

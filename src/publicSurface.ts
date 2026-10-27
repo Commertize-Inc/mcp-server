@@ -24,6 +24,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 import { DISCLAIMER, DISCLAIMER_ID } from "./disclaimer.js";
 import { withDisclaimerBlock } from "./disclaimerBlock.js";
+import { D6_DISCLAIMER } from "./refusals.js";
 
 export const PUBLIC_TOOL_NAMES = ["get_news", "get_article", "platform_info"] as const;
 
@@ -80,6 +81,7 @@ export const withPublicDisclaimer = (
 		const structured = {
 			as_of: new Date().toISOString(),
 			disclaimer: PUBLIC_DISCLAIMER,
+			sec_disclaimer: D6_DISCLAIMER,
 			error: { code: "INTERNAL_ERROR", message: "Internal error", retryable: false },
 		};
 		return {
@@ -88,7 +90,11 @@ export const withPublicDisclaimer = (
 			isError: true,
 		};
 	}
-	const structured: Record<string, unknown> = { ...s, disclaimer: PUBLIC_DISCLAIMER };
+	const structured: Record<string, unknown> = {
+		...s,
+		disclaimer: PUBLIC_DISCLAIMER,
+		sec_disclaimer: D6_DISCLAIMER,
+	};
 	const err = (s as { error?: unknown }).error;
 	if (err && typeof err === "object") {
 		const e = err as { code?: unknown; message?: unknown; retryable?: unknown };
@@ -133,6 +139,7 @@ export const publicToolError = (message: string): CallToolResult => {
 		source_url: "",
 		cache: { hit: false, age_seconds: 0, stale: false },
 		disclaimer: PUBLIC_DISCLAIMER,
+		sec_disclaimer: D6_DISCLAIMER,
 		error: { code, message: publicErrorMessageFor(code), retryable: false },
 	};
 	return withDisclaimerBlock({

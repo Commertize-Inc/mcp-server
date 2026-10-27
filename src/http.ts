@@ -64,10 +64,24 @@ interface CacheEntry {
 const cache = new Map<string, CacheEntry>();
 const inFlight = new Map<string, Promise<CacheEntry>>();
 
+/**
+ * Negative cache: an upstream 404 ("no such article") is remembered for the
+ * same TTL as a body, so repeating an unknown slug costs one upstream GET per
+ * window, not one per call (security review PR #4 F4-1). Only 404 is cached; a 5xx,
+ * 429 or timeout is a fault worth retrying. Bounded, oldest evicted first,
+ * because the keys are caller-chosen.
+ */
+const NOT_FOUND_MAX = 1000;
+const notFound = new Map<string, { err: ApiError; at: number }>();
+
+/** Test seam: how many bodies the positive cache holds. */
+export const cacheSize = (): number => cache.size;
+
 /** Test seam: drop all cached bodies. */
 export const clearCache = (): void => {
 	cache.clear();
 	inFlight.clear();
+	notFound.clear();
 };
 
 const ageSeconds = (fetchedAt: number): number =>
@@ -141,6 +155,8 @@ export const getJson = async <T>(path: string): Promise<ApiResult<T>> => {
 	const cached = cache.get(url);
 
 	if (cached && Date.now() - cached.fetchedAt < config.cacheTtlMs) {
+		cache.delete(url);
+		cache.set(url, cached);
 		return {
 			body: cached.body as T,
 			fetchedAt: new Date(cached.fetchedAt),
@@ -148,6 +164,9 @@ export const getJson = async <T>(path: string): Promise<ApiResult<T>> => {
 			sourceUrl: url,
 		};
 	}
+
+	const miss = notFound.get(url);
+	if (miss && Date.now() - miss.at < config.cacheTtlMs) throw miss.err;
 
 	let pending = inFlight.get(url);
 	if (!pending) {
@@ -160,7 +179,15 @@ export const getJson = async <T>(path: string): Promise<ApiResult<T>> => {
 
 	try {
 		const entry = await pending;
+		// LRU: re-insert so the newest key is last, then evict from the front.
+		// The keys carry caller-chosen query strings, so the map is bounded.
+		cache.delete(url);
 		cache.set(url, entry);
+		while (cache.size > config.cacheMaxEntries) {
+			const oldest = cache.keys().next().value;
+			if (oldest === undefined) break;
+			cache.delete(oldest);
+		}
 		return {
 			body: entry.body as T,
 			fetchedAt: new Date(entry.fetchedAt),
@@ -168,6 +195,16 @@ export const getJson = async <T>(path: string): Promise<ApiResult<T>> => {
 			sourceUrl: url,
 		};
 	} catch (err) {
+		if (err instanceof ApiError && err.status === 404) {
+			notFound.delete(url);
+			notFound.set(url, { err, at: Date.now() });
+			if (notFound.size > NOT_FOUND_MAX) {
+				const oldest = notFound.keys().next().value;
+				if (oldest !== undefined) notFound.delete(oldest);
+			}
+			cache.delete(url);
+			throw err;
+		}
 		// API is down. A stale-but-labelled body beats nothing, up to a bound.
 		if (cached && Date.now() - cached.fetchedAt < config.staleMaxMs) {
 			return {

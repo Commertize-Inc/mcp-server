@@ -39,6 +39,13 @@ import { SCREENER_TOOL_NAMES } from "./screenerTools.js";
 import { X402_TOOL_NAMES } from "./x402Tools.js";
 import { HTTP_TOOL_ALLOWLIST } from "./httpAllowlist.js";
 import { INQUIRY_TOOL_NAME } from "./inquiryTool.js";
+import { PUBLIC_TOOL_SET, withPublicDisclaimer } from "./publicSurface.js";
+import { canonicalSince } from "./since.js";
+import {
+	DISCLAIMER_BLOCK_TOOLS,
+	disclaimerBlockSchema,
+	withDisclaimerBlock,
+} from "./disclaimerBlock.js";
 import {
 	FIREWALL_NOTE,
 	FIREWALL_SOURCE_PATH,
@@ -60,7 +67,7 @@ const CONTENT_DIR =
  * `platform_info` must describe THAT surface — a manifest that names a tool
  * the transport refuses is the same lie as one naming an unregistered tool.
  */
-export type ToolSurface = "stdio" | "http";
+export type ToolSurface = "stdio" | "http" | "public";
 
 /* ------------------------------------------------------------------ */
 /* response helpers                                                    */
@@ -167,10 +174,37 @@ export const registerTools = (
 	server: McpServer,
 	surface: ToolSurface = "stdio"
 ): void => {
+	/*
+	 * Every registration below goes through `register`. On the stdio and
+	 * keyed-HTTP surfaces it IS `server.registerTool`. On the public surface
+	 * it registers only `PUBLIC_TOOL_SET` names (anything else is never
+	 * registered, so `tools/list` cannot advertise it) and swaps the envelope's
+	 * disclaimer for the certified public one on every result, error included.
+	 *
+	 * On EVERY surface, the tools in `DISCLAIMER_BLOCK_TOOLS` (and only those)
+	 * get the machine-readable `disclaimer_block`, after the disclaimer is
+	 * final, so its `text_id` names the text actually served (legal review §7).
+	 */
+	const register = ((name: string, cfg: unknown, cb: (...a: unknown[]) => unknown) => {
+		if (surface === "public" && !PUBLIC_TOOL_SET.has(name)) return undefined;
+		const pub = surface === "public";
+		const block = DISCLAIMER_BLOCK_TOOLS.has(name);
+		const handler =
+			!pub && !block
+				? cb
+				: async (...a: unknown[]) => {
+						let r = (await cb(...a)) as CallToolResult;
+						if (pub) r = withPublicDisclaimer(r);
+						if (block) r = withDisclaimerBlock(r);
+						return r;
+					};
+		return (server.registerTool as (...a: unknown[]) => unknown).call(server, name, cfg, handler);
+	}) as unknown as McpServer["registerTool"];
+
 	/* ---------------------------------------------------------- */
 	/* list_offerings                                              */
 	/* ---------------------------------------------------------- */
-	server.registerTool(
+	register(
 		"list_offerings",
 		{
 			title: "List Commertize marketplace offerings",
@@ -291,7 +325,7 @@ export const registerTools = (
 	/* ---------------------------------------------------------- */
 	/* get_offering                                                */
 	/* ---------------------------------------------------------- */
-	server.registerTool(
+	register(
 		"get_offering",
 		{
 			title: "Get one Commertize offering",
@@ -381,7 +415,7 @@ export const registerTools = (
 	/* ---------------------------------------------------------- */
 	/* get_news                                                    */
 	/* ---------------------------------------------------------- */
-	server.registerTool(
+	register(
 		"get_news",
 		{
 			title: "Get Commertize news and market commentary",
@@ -416,8 +450,10 @@ export const registerTools = (
 					),
 				since: z
 					.string()
-					.refine((s) => !Number.isNaN(Date.parse(s)), {
-						message: "since must be an ISO 8601 date",
+					.max(40)
+					.refine((s) => canonicalSince(s) !== null, {
+						message:
+							"since must be an ISO 8601 date (YYYY-MM-DD) or timestamp with a zone, between 2000-01-01 and tomorrow",
 					})
 					.optional()
 					.describe(
@@ -426,17 +462,20 @@ export const registerTools = (
 			},
 			outputSchema: {
 				...envelopeShape,
+				disclaimer_block: disclaimerBlockSchema,
 				articles: z.array(articleSummarySchema),
 				count: z.number(),
 			},
-			annotations: { readOnlyHint: true, openWorldHint: true },
+			annotations: { title: "Get Commertize news and market commentary", readOnlyHint: true, openWorldHint: true },
 		},
 		async (args) => {
 			const empty = { articles: [], count: 0 };
 			const limit = args.limit ?? 20;
 			const qs = new URLSearchParams({ limit: String(limit) });
 			if (args.class) qs.set("class", args.class);
-			if (args.since) qs.set("since", args.since);
+			// Canonical minute bucket: every spelling of one minute is one cache key.
+			const since = args.since ? canonicalSince(args.since) : null;
+			if (since) qs.set("since", since);
 			const pathname = `/api/news?${qs.toString()}`;
 			try {
 				const res = await getJson<{ data?: RawArticle[] }>(pathname);
@@ -451,8 +490,8 @@ export const registerTools = (
 					const want = args.class;
 					articles = articles.filter((a) => a.tags.includes(want));
 				}
-				if (args.since) {
-					const floor = Date.parse(args.since);
+				if (since) {
+					const floor = Date.parse(since);
 					articles = articles.filter((a) => {
 						const t = a.published_at ? Date.parse(a.published_at) : NaN;
 						return !Number.isNaN(t) && t >= floor;
@@ -482,7 +521,7 @@ export const registerTools = (
 	/* ---------------------------------------------------------- */
 	/* get_article                                                 */
 	/* ---------------------------------------------------------- */
-	server.registerTool(
+	register(
 		"get_article",
 		{
 			title: "Get one Commertize article",
@@ -492,13 +531,14 @@ export const registerTools = (
 				slug: z
 					.string()
 					.min(1)
-					.describe('Article slug, e.g. "ai-in-cre-asset-management-from-rent-rolls-to-returns".'),
+					.describe('Article slug, e.g. "the-oracle-layer-for-rwa-tokenization-explained".'),
 			},
 			outputSchema: {
 				...envelopeShape,
+				disclaimer_block: disclaimerBlockSchema,
 				article: articleFullSchema.nullable(),
 			},
-			annotations: { readOnlyHint: true, openWorldHint: true },
+			annotations: { title: "Get one Commertize article", readOnlyHint: true, openWorldHint: true },
 		},
 		async ({ slug }) => {
 			const empty = { article: null };
@@ -553,15 +593,16 @@ export const registerTools = (
 	/* ---------------------------------------------------------- */
 	/* platform_info                                               */
 	/* ---------------------------------------------------------- */
-	server.registerTool(
+	register(
 		"platform_info",
 		{
 			title: "About Commertize",
 			description:
-				"Curated reference text an agent should read before using the other tools: what Commertize is, what it lists, how offerings are structured, how investor and sponsor onboarding checks work, and exactly what agents can and cannot do through public interfaces. Static text, not live data.",
+				"Returns static reference text about Commertize and this server. Not live data.",
 			inputSchema: {},
 			outputSchema: {
 				...envelopeShape,
+				disclaimer_block: disclaimerBlockSchema,
 				markdown: z.string().nullable(),
 				capabilities: z
 					.object({
@@ -573,7 +614,7 @@ export const registerTools = (
 					})
 					.describe("Machine-readable summary of this server's surface."),
 			},
-			annotations: { readOnlyHint: true, openWorldHint: false },
+			annotations: { title: "About Commertize", readOnlyHint: true, openWorldHint: false },
 		},
 		async () => {
 			/*
@@ -592,7 +633,9 @@ export const registerTools = (
 			const onSurface = (names: readonly string[]): string[] =>
 				surface === "http"
 					? names.filter((n) => HTTP_TOOL_ALLOWLIST.has(n))
-					: [...names];
+					: surface === "public"
+						? names.filter((n) => PUBLIC_TOOL_SET.has(n))
+						: [...names];
 			const writeTools = onSurface([
 				// `request_memo` reaches a person, but its upstream route is not
 				// mounted in production (probed 2026-09-10) — so it is registered,
@@ -617,9 +660,15 @@ export const registerTools = (
 				// here would have gone on claiming a write surface `tools/list` no
 				// longer carries.
 				read_only: writeTools.length === 0,
-				// The reads need none; `request_memo` needs COMMERTIZE_AGENT_KEY.
-				requires_authentication: false,
-				can_transact: false,
+				// Derived per surface (legal review 2026-10-15 F-C / C2-1; platform-info.md
+				// points the reader at this field, so it must be true). The keyed
+				// HTTP surface refuses every request without a bearer key; stdio and
+				// the public surface serve their reads keyless.
+				requires_authentication: surface === "http",
+				// `x402_fetch` spends the caller's own funds on-chain, so a surface
+				// that registers it can transact. `writeTools` is already filtered
+				// to this surface and to the open gates.
+				can_transact: writeTools.includes("x402_fetch"),
 				write_tools: writeTools,
 				tools: onSurface([
 					"list_offerings",

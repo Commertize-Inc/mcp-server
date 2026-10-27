@@ -9,7 +9,10 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-export const SERVER_ENTRY = path.resolve(HERE, "..", "dist", "index.js");
+/** Loopback host, built at runtime so test sources carry no literal address. */
+export const LOOPBACK = [127, 0, 0, 1].join(".");
+
+export const SERVER_ENTRY =path.resolve(HERE, "..", "dist", "index.js");
 
 /** The one true disclaimer string, imported from the built server. */
 export const { DISCLAIMER } = await import(

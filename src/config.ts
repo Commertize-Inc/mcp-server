@@ -33,6 +33,9 @@ export const config = {
 	/** Fresh-response window. Repeat calls inside it never touch the API. */
 	cacheTtlMs: int(process.env.COMMERTIZE_CACHE_TTL_MS, 60_000),
 
+	/** Most bodies the response cache holds; least recently used is evicted first. */
+	cacheMaxEntries: int(process.env.COMMERTIZE_CACHE_MAX_ENTRIES, 500),
+
 	/**
 	 * How long a cached body may still be served after the API starts
 	 * failing. Serving stale beats serving nothing, but it is always
@@ -240,6 +243,28 @@ export const config = {
 
 	/** Largest JSON-RPC body accepted over HTTP, in bytes. */
 	httpMaxBodyBytes: int(process.env.COMMERTIZE_MCP_HTTP_MAX_BODY_BYTES, 65_536),
+
+	/**
+	 * Gate for the NO-LOGIN public endpoint `POST /mcp/public`
+	 * (publicSurface.ts, httpPublic.ts). Default CLOSED: unset, empty, "true"
+	 * or anything but the exact string "1" answers 404, as does the kill switch
+	 * `COMMERTIZE_MCP_DISABLE_PUBLIC=1` whatever ENABLE says. The keyed `/mcp`
+	 * is unaffected either way.
+	 */
+	publicDisabled:
+		process.env.COMMERTIZE_MCP_DISABLE_PUBLIC === "1" ||
+		process.env.COMMERTIZE_MCP_ENABLE_PUBLIC !== "1",
+
+	/**
+	 * Per-client-IP ceiling on JSON-RPC requests to `/mcp/public` (fixed
+	 * one-minute window, in memory, per process). The upstream news route's
+	 * own per-IP limit (120/min) is the floor behind it, and the 60 s response
+	 * cache means repeat reads cost no upstream call.
+	 */
+	publicRequestsPerIpPerMinute: int(
+		process.env.COMMERTIZE_MCP_PUBLIC_RPM_PER_IP,
+		30
+	),
 
 	/**
 	 * Where `content/` lives. Default: next to `dist/`. A packager that moves

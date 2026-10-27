@@ -11,6 +11,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 
 import { config } from "./config.js";
 import { registerInquiryTool } from "./inquiryTool.js";
+import { registerPlatformTools } from "./platformTools.js";
 import { registerSandboxTools } from "./sandboxTools.js";
 import { registerScreenerTools } from "./screenerTools.js";
 import { registerX402Tools } from "./x402Tools.js";
@@ -86,6 +87,10 @@ export const createServer = (surface: ToolSurface = "stdio"): McpServer => {
 	 * and its purchase terms are unratified draft text, so a tool that quotes a
 	 * price against them should not appear in a tool list. */
 	registerX402Tools(server);
+	/* Gated at registration like the groups above: on 2026-10-27 production
+	 * answered 404 for every route these three read. stdio only; adding
+	 * them to the HTTP allowlist is its own reviewed change. */
+	registerPlatformTools(server);
 	return server;
 };
 

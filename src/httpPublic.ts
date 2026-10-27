@@ -130,7 +130,7 @@ export const createPublicHttpHandler = (o: PublicHandlerOptions): NodeHandler =>
 		try {
 			if (!o.enabled() || path !== PUBLIC_PATH) {
 				outcome = "not_found";
-				send(404, refusalBody("not_found"));
+				send(404, refusalBody("not_found", {}, o.enabled()));
 				return;
 			}
 			if (method !== "POST") {
@@ -346,7 +346,7 @@ export const createOpenApiHandler = (o: { enabled: () => boolean }): NodeHandler
 		const method = (req.method ?? "GET").toUpperCase();
 		if (!o.enabled() || path !== OPENAPI_PATH) {
 			res.writeHead(404, JSON_HEADERS);
-			res.end(JSON.stringify(refusalBody("not_found")));
+			res.end(JSON.stringify(refusalBody("not_found", {}, o.enabled())));
 			return;
 		}
 		if (method !== "GET" && method !== "HEAD") {

@@ -1,8 +1,8 @@
 /**
  * The front door for outside agents (market research competitive map 2026-10-20 §6, §8).
  *
- *   A. Discovery: `/.well-known/agent-card.json` and `/.well-known/agent.json`
- *      serve an A2A v1.0 card for the no-key endpoint, behind the public gate.
+ *   A. No A2A agent card: this server speaks MCP only (platform 2026-10-24); a
+ *      /.well-known request is a plain not_found, and no fix line names a card.
  *   B. Every tool on every surface carries the full annotation set
  *      (readOnly/destructive/idempotent/openWorld hints + title) and a
  *      pricing block in `_meta["com.commertize/pricing"]`. A tool with no
@@ -10,7 +10,7 @@
  *      registered.
  *   C. No key: `initialize` and `tools/list` work on `/mcp/public` with no
  *      Authorization header.
- *   D. Every refusal on the public surface, the keyed surface and the card
+ *   D. Every refusal on the public and keyed surfaces
  *      is `{ error: <code>, fix: <one line> }` (JSON-RPC: `error.data`).
  *
  * DIST may be overridden (FD_DIST) so the same file runs against a base
@@ -47,7 +47,6 @@ const tryImport = async (f) => {
 		return {};
 	}
 };
-const cardMod = await tryImport("agentCard.js");
 const metaMod = await tryImport("toolMeta.js");
 
 /* Pinned HERE, never read back from the module under test. */
@@ -155,7 +154,6 @@ const tightHandler = createPublicHttpHandler({
 	log: () => {},
 	maxBodyBytes: 4096,
 });
-const cardHandler = cardMod.createAgentCardHandler?.({ enabled: () => publicEnabled });
 const openApi = createOpenApiHandler({ enabled: () => publicEnabled });
 const keyed = createHttpHandler({
 	verifier: {
@@ -170,12 +168,12 @@ const keyed = createHttpHandler({
 	log: () => {},
 	maxBodyBytes: 4096,
 	version: "test",
+	publicOpen: () => publicEnabled,
 });
 
 const route = (req, res) => {
 	const p = new URL(req.url, "http://x").pathname;
 	const h =
-		p.startsWith("/.well-known/") ? cardHandler :
 		p === "/openapi.json" ? openApi :
 		p.startsWith("/throw") ? throwingHandler :
 		p.startsWith("/tight") ? tightHandler :
@@ -212,29 +210,23 @@ const INIT = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", param
 const LIST = JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
 
 /* ------------------------------------------------------------------ */
-section("A. agent card (A2A v1.0 well-known path + legacy alias)");
+section("A. no A2A agent card on this server (platform 2026-10-24, architecture wave-1 ARCH)");
 {
-	check("agentCard module exports a handler", typeof cardHandler === "function");
-	for (const p of ["/.well-known/agent-card.json", "/.well-known/agent.json"]) {
-		const r = await req(p, { method: "GET" });
-		const c = r.json ?? {};
-		check(`${p}: 200 JSON`, r.status === 200, String(r.status));
-		const required = ["name", "description", "supportedInterfaces", "version", "capabilities", "defaultInputModes", "defaultOutputModes", "skills"];
-		check(`${p}: every A2A v1.0 required field present`, required.every((k) => k in c), Object.keys(c).join(","));
-		const iface = (c.supportedInterfaces ?? [])[0] ?? {};
-		check(`${p}: the interface is the NO-KEY endpoint`, iface.url === PUBLIC_URL && typeof iface.protocolBinding === "string" && iface.protocolVersion === "2025-06-18", JSON.stringify(iface));
-		check(`${p}: no A2A core binding is claimed (this server speaks MCP)`, !["JSONRPC", "GRPC", "HTTP+JSON"].includes(iface.protocolBinding));
-		check(`${p}: the keyed /mcp is not advertised`, !JSON.stringify(c).includes('agents.commertize.com/mcp"'));
-		check(`${p}: version = served version`, c.version === SERVER_VERSION, String(c.version));
-		check(`${p}: carries the D6 disclaimer in its own field`, c.sec_disclaimer === D6 && c.disclaimer === undefined);
-		check(`${p}: skills = the public tools, each with id/name/description/tags`, JSON.stringify((c.skills ?? []).map((s) => s.id).sort()) === JSON.stringify(["get_article", "get_news", "platform_info"]) && (c.skills ?? []).every((s) => s.name && s.description && Array.isArray(s.tags)));
-	}
-	const post = await req("/.well-known/agent-card.json", { method: "POST" });
-	check("card: POST is 405 with a code and a fix", post.status === 405 && post.json?.error === "get_only" && isFixLine(post.json?.fix), JSON.stringify(post.json));
-	publicEnabled = false;
-	const closed = await req("/.well-known/agent.json", { method: "GET" });
-	check("card: gate closed is 404 with a code and a fix", closed.status === 404 && closed.json?.error === "not_found" && isFixLine(closed.json?.fix), JSON.stringify(closed.json));
-	publicEnabled = true;
+	// Re-stated: #13 served an A2A card for the MCP endpoint; a strict A2A
+	// client fails on that, and the only A2A card lives on the backend. The
+	// card module, its Vercel entry and its rewrites are gone, and no fix line
+	// may name the card URL.
+	const fs = await import("node:fs");
+	const ROOT = path.resolve(HERE, "..");
+	const vercel = JSON.parse(fs.readFileSync(path.join(ROOT, "vercel.json"), "utf8"));
+	check("vercel.json rewrites no /.well-known path", !(vercel.rewrites ?? []).some((r) => String(r.source).startsWith("/.well-known/")), JSON.stringify(vercel.rewrites));
+	check("no api/agent-card.js entry", !fs.existsSync(path.join(ROOT, "api", "agent-card.js")));
+	check("no src/agentCard.ts module", !fs.existsSync(path.join(ROOT, "src", "agentCard.ts")));
+	const { REFUSAL_FIX, fixFor } = await tryImport("refusals.js");
+	const codes = Object.keys(REFUSAL_FIX ?? {});
+	check("no fix line that is sent, gate open or closed, names the card", codes.length > 0 && codes.every((c) => ![true, false].some((open) => /agent-card\.json|agent\.json/.test(fixFor?.(c, open) ?? ""))));
+	const r = await req("/.well-known/agent-card.json", { method: "GET" });
+	check("a /.well-known request reaches no card (404 not_found, no fix)", r.status === 404 && r.json?.error === "not_found" && r.json?.fix === undefined && r.json?.sec_disclaimer === D6, JSON.stringify(r.json));
 }
 
 /* ------------------------------------------------------------------ */
@@ -267,9 +259,14 @@ section("D. every refusal is a code plus a one-line fix");
 		["keyed 404", () => req("/health/x", { method: "GET" }), 404, "not_found"],
 		["health 405", () => req("/health", { method: "POST" }), 405, "get_only"],
 	];
+	// Re-stated (pointer-gate B): a closed-gate case gets no fix, because the
+	// not_found line names the endpoint that is closed.
+	// not_found never carries a fix now: its certified line names the card.
+	const CLOSED = new Set(["public 404 (closed gate)", "openapi 404 (closed)", "public 404 (other path)", "keyed 404"]);
 	for (const [label, run, status, code] of cases) {
 		const r = await run();
-		check(`${label}: HTTP ${status}, error=${code}, one-line fix, D6 disclaimer`, r.status === status && r.json?.error === code && isFixLine(r.json?.fix) && r.json?.sec_disclaimer === D6 && r.json?.disclaimer === undefined && !r.json.fix.includes(D6), `${r.status} ${JSON.stringify(r.json)}`);
+		const fixOk = CLOSED.has(label) ? r.json?.fix === undefined : isFixLine(r.json?.fix) && !r.json.fix.includes(D6);
+		check(`${label}: HTTP ${status}, error=${code}, ${CLOSED.has(label) ? "no fix" : "one-line fix"}, D6 disclaimer`, r.status === status && r.json?.error === code && fixOk && r.json?.sec_disclaimer === D6 && r.json?.disclaimer === undefined, `${r.status} ${JSON.stringify(r.json)}`);
 	}
 	const k = await req("/mcp", { body: INIT, headers: J });
 	check("keyed 401 fix points at the no-key endpoint", typeof k.json?.fix === "string" && k.json.fix.includes(PUBLIC_URL));

@@ -77,11 +77,45 @@ section("README carries no dated route-verification claim and no single-class le
 	check("no 'real estate' in README", !/real[- ]estate/i.test(README));
 }
 
-// AXIOM RULING agent-adoption MCP contracts 2026-10-15, R3-a..R3-d + pin.
+// legal review RULING_verification_noun_2026-10-24 §1: no /verif/i in any form in
+// copy a reader sees. The README, glama.json, package.json and the bundled
+// skill/content files are republished by directories, so all of them count.
+section("no 'verif' stem in any republished file");
+{
+	const { readdir } = await import("node:fs/promises");
+	const walk = async (d) => {
+		const out = [];
+		for (const e of await readdir(path.join(ROOT, d), { withFileTypes: true })) {
+			const rel = path.join(d, e.name);
+			if (e.isDirectory()) out.push(...(await walk(rel)));
+			else out.push(rel);
+		}
+		return out;
+	};
+	const files = ["README.md", "glama.json", "package.json", ...(await walk("commertize-skill")), ...(await walk("content"))];
+	const hits = [];
+	for (const f of files) {
+		const text = f === "package.json" ? JSON.parse(await readFile(path.join(ROOT, f), "utf8")).description ?? "" : await readFile(path.join(ROOT, f), "utf8");
+		if (/verif/i.test(text)) hits.push(f);
+	}
+	check("scanned the README, glama.json, package.json and both trees", files.length >= 5 && files.includes("content/platform-info.md"), files.join(","));
+	check("no file carries the stem", hits.length === 0, hits.join(","));
+	check("control: the scan catches the stem", /verif/i.test("Identity Verification"));
+}
+
+// Built is not deployed: until /mcp/public is live with its flag on, the
+// README describes only the stdio install. listing review adds the remote section,
+// through legal review, on deploy day, and this check changes in the same diff.
+section("README names no remote endpoint before it is live");
+{
+	check("no /mcp/public and no agents.commertize.com URL in README", !/\/mcp\/public|agents\.commertize\.com/i.test(README));
+}
+
+// legal review RULING agent-adoption MCP contracts 2026-10-15, R3-a..R3-d + pin.
 // The README names no parked surface (inquiries), no gated product area
 // (x402, sandbox, screener), no link to the uncertified agent skill, and no
 // key a reader cannot obtain. Each check is a whole-file count, case-blind.
-section("AXIOM R3: no parked or gated surface, no key, no extra links");
+section("legal review R3: no parked or gated surface, no key, no extra links");
 {
 	for (const word of ["inquir", "x402", "sandbox", "screener", "agent-skill", "Bearer"]) {
 		const count = README.toLowerCase().split(word.toLowerCase()).length - 1;

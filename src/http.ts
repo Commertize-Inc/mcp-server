@@ -64,10 +64,21 @@ interface CacheEntry {
 const cache = new Map<string, CacheEntry>();
 const inFlight = new Map<string, Promise<CacheEntry>>();
 
+/**
+ * Negative cache: an upstream 404 ("no such article") is remembered for the
+ * same TTL as a body, so repeating an unknown slug costs one upstream GET per
+ * window, not one per call (security review PR #4 F4-1). Only 404 is cached; a 5xx,
+ * 429 or timeout is a fault worth retrying. Bounded, oldest evicted first,
+ * because the keys are caller-chosen.
+ */
+const NOT_FOUND_MAX = 1000;
+const notFound = new Map<string, { err: ApiError; at: number }>();
+
 /** Test seam: drop all cached bodies. */
 export const clearCache = (): void => {
 	cache.clear();
 	inFlight.clear();
+	notFound.clear();
 };
 
 const ageSeconds = (fetchedAt: number): number =>
@@ -149,6 +160,9 @@ export const getJson = async <T>(path: string): Promise<ApiResult<T>> => {
 		};
 	}
 
+	const miss = notFound.get(url);
+	if (miss && Date.now() - miss.at < config.cacheTtlMs) throw miss.err;
+
 	let pending = inFlight.get(url);
 	if (!pending) {
 		pending = fetchFresh(url);
@@ -168,6 +182,16 @@ export const getJson = async <T>(path: string): Promise<ApiResult<T>> => {
 			sourceUrl: url,
 		};
 	} catch (err) {
+		if (err instanceof ApiError && err.status === 404) {
+			notFound.delete(url);
+			notFound.set(url, { err, at: Date.now() });
+			if (notFound.size > NOT_FOUND_MAX) {
+				const oldest = notFound.keys().next().value;
+				if (oldest !== undefined) notFound.delete(oldest);
+			}
+			cache.delete(url);
+			throw err;
+		}
 		// API is down. A stale-but-labelled body beats nothing, up to a bound.
 		if (cached && Date.now() - cached.fetchedAt < config.staleMaxMs) {
 			return {

@@ -79,7 +79,9 @@ const WORK_NESTED_KEYS: Record<string, readonly string[]> = {
 };
 export const WORK_VALUE_MAX = 128;
 const shortString = (v: unknown): v is string =>
-	typeof v === "string" && v.length <= WORK_VALUE_MAX && !/[\r\n]/.test(v);
+	typeof v === "string" &&
+	v.length <= WORK_VALUE_MAX &&
+	!/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(v);
 
 export const sanitizeWorkTask = (raw: unknown): Record<string, unknown> => {
 	const out: Record<string, unknown> = {};

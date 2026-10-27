@@ -69,6 +69,11 @@ const BODIES = {
 				acceptance: { method: "exact", note: "dropped" },
 				deadline: "x".repeat(200),
 				submissions_count: 3,
+				task_version: "v1 injected line",
+				task_class: "screen para",
+				posted_at: "2026‮reversed",
+				required_kya_tier: "t1\u0000",
+				source: { dataset_key: "ds\tkey", snapshot_sha256: "abc" },
 			},
 		],
 	},
@@ -241,6 +246,18 @@ section("3. served route: content, verbatim captions, deployed");
 	check(
 		"work: overlong string dropped",
 		!("deadline" in (payload.data?.[0] ?? {})),
+	);
+	for (const [label, key] of [
+		["U+2028 line separator", "task_version"],
+		["U+2029 paragraph separator", "task_class"],
+		["U+202E bidi override", "posted_at"],
+		["NUL control", "required_kya_tier"],
+	])
+		check(`work: ${label} dropped`, !(key in (payload.data?.[0] ?? {})));
+	check(
+		"work: tab in a nested value dropped, clean sibling kept",
+		!("dataset_key" in (payload.data?.[0]?.source ?? {})) &&
+			payload.data?.[0]?.source?.snapshot_sha256 === "abc",
 	);
 	check(
 		"work: non-string value dropped",

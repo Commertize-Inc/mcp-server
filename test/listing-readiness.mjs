@@ -17,7 +17,7 @@ import { createServer as createNodeServer } from "node:http";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { check, connect, resetCounters, section, summary } from "./harness.mjs";
+import { check, connect, LOOPBACK, resetCounters, section, summary } from "./harness.mjs";
 
 const DIST = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "dist");
 const PUBLIC_THREE = ["get_news", "get_article", "platform_info"];
@@ -87,8 +87,8 @@ section("3. GET /openapi.json");
 		let enabled = false;
 		const h = mod.createOpenApiHandler({ enabled: () => enabled });
 		const srv = createNodeServer((req, res) => void h(req, res));
-		await new Promise((r) => srv.listen(0, "127.0.0.1", r));
-		const base = `http://127.0.0.1:${srv.address().port}`;
+		await new Promise((r) => srv.listen(0, LOOPBACK, r));
+		const base = `http://${LOOPBACK}:${srv.address().port}`;
 
 		let r = await fetch(`${base}/openapi.json`);
 		check("gate closed: 404", r.status === 404, String(r.status));

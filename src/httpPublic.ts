@@ -135,33 +135,33 @@ export const createPublicHttpHandler = (o: PublicHandlerOptions): NodeHandler =>
 			}
 			if (method !== "POST") {
 				outcome = "method_not_allowed";
-				send(405, refusalBody("method_not_allowed"), { allow: "POST" });
+				send(405, refusalBody("method_not_allowed", {}, o.enabled()), { allow: "POST" });
 				return;
 			}
 			// The Origin value is caller-chosen text: never logged.
 			if (!originAllowed(req.headers.origin)) {
 				outcome = "origin_refused";
-				send(403, refusalBody("origin_not_allowed"));
+				send(403, refusalBody("origin_not_allowed", {}, o.enabled()));
 				return;
 			}
 
 			const limit = o.ipLimiter.hit(clientIpOf(req));
 			if (!limit.allowed) {
 				outcome = "rate_limited";
-				send(429, refusalBody("rate_limited"), { "retry-after": String(limit.retryAfterSeconds) });
+				send(429, refusalBody("rate_limited", {}, o.enabled()), { "retry-after": String(limit.retryAfterSeconds) });
 				return;
 			}
 
 			const ct = String(req.headers["content-type"] ?? "");
 			if (!/^application\/json(?:[ \t]*;|$)/i.test(ct)) {
 				outcome = "unsupported_media_type";
-				send(415, refusalBody("unsupported_media_type"));
+				send(415, refusalBody("unsupported_media_type", {}, o.enabled()));
 				return;
 			}
 			const raw = await readBody(req, o.maxBodyBytes);
 			if (raw === null) {
 				outcome = "payload_too_large";
-				send(413, refusalBody("payload_too_large"));
+				send(413, refusalBody("payload_too_large", {}, o.enabled()));
 				return;
 			}
 			let parsed: unknown;
@@ -252,7 +252,7 @@ export const createPublicHttpHandler = (o: PublicHandlerOptions): NodeHandler =>
 				event: "public_error",
 				message: err instanceof Error ? err.message : String(err),
 			});
-			if (!res.headersSent) send(500, refusalBody("internal_error"));
+			if (!res.headersSent) send(500, refusalBody("internal_error", {}, o.enabled()));
 		} finally {
 			const evt: HttpLogEvent = {
 				ts: new Date(now()).toISOString(),
@@ -288,7 +288,7 @@ export const createPublicHttpHandler = (o: PublicHandlerOptions): NodeHandler =>
  * means 404, so the document never advertises an endpoint that answers 404.
  * The keyed `/mcp` is left out on purpose (a directory reader cannot obtain a
  * key). The summary and description strings are legal review-certified L7a-e
- * (CERT_mcp_directory_listings_2026-10-19); public-hardening.mjs pins the
+ * (directory listings review, 2026-10-19); public-hardening.mjs pins the
  * bytes, and info.version pins to package.json. Changing one needs a re-cert.
  */
 export const OPENAPI_PATH = "/openapi.json";
@@ -351,7 +351,7 @@ export const createOpenApiHandler = (o: { enabled: () => boolean }): NodeHandler
 		}
 		if (method !== "GET" && method !== "HEAD") {
 			res.writeHead(405, { ...JSON_HEADERS, allow: "GET, HEAD" });
-			res.end(JSON.stringify(refusalBody("get_only")));
+			res.end(JSON.stringify(refusalBody("get_only", {}, o.enabled())));
 			return;
 		}
 		res.writeHead(200, JSON_HEADERS);

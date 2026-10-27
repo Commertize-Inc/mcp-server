@@ -21,7 +21,7 @@ import { createServer as createNodeServer } from "node:http";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { check, resetCounters, section, summary } from "./harness.mjs";
+import { check, LOOPBACK, resetCounters, section, summary } from "./harness.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const DIST = process.env.FD_DIST ?? path.resolve(HERE, "..", "dist");
@@ -57,8 +57,11 @@ const HINTS = ["readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHi
 const WRITES = new Set(["file_sponsor_inquiry", "request_memo", "sandbox_enroll", "sandbox_place_order", "x402_fetch"]);
 /** Tools whose call can be answered with an x402 challenge. */
 const PAID = new Set(["x402_fetch"]);
-/* legal review CERT_front_door_copy_2026-10-20 §1, pinned HERE byte for byte. */
+/* Legal review front-door copy (2026-10-20), section 1, pinned HERE byte for byte. */
 const D6 = "Commertize is not registered with or regulated by the SEC as a broker-dealer or investment adviser. This is not a recommendation or investment advice. Consult your own advisers.";
+/* Ruling D4 3.1 not_found lines, pinned byte for byte. */
+const NF_CLOSED = "Unknown path. Check the URL and the HTTP method.";
+const NF_OPEN = "Unknown path. The no-key MCP endpoint is POST https://agents.commertize.com/mcp/public.";
 const isFixLine = (f) => typeof f === "string" && f.length > 0 && f.length <= 200 && !/[\r\n]/.test(f);
 
 const listTools = async (surface) => {
@@ -188,8 +191,8 @@ const route = (req, res) => {
 	});
 };
 const http = createNodeServer(route);
-await new Promise((r) => http.listen(0, "127.0.0.1", r));
-const BASE = `http://127.0.0.1:${http.address().port}`;
+await new Promise((r) => http.listen(0, LOOPBACK, r));
+const BASE = `http://${LOOPBACK}:${http.address().port}`;
 
 let ip = 0;
 const req = async (p, { method = "POST", body, headers = {} } = {}) => {
@@ -226,7 +229,7 @@ section("A. no A2A agent card on this server (platform 2026-10-24, architecture 
 	const codes = Object.keys(REFUSAL_FIX ?? {});
 	check("no fix line that is sent, gate open or closed, names the card", codes.length > 0 && codes.every((c) => ![true, false].some((open) => /agent-card\.json|agent\.json/.test(fixFor?.(c, open) ?? ""))));
 	const r = await req("/.well-known/agent-card.json", { method: "GET" });
-	check("a /.well-known request reaches no card (404 not_found, no fix)", r.status === 404 && r.json?.error === "not_found" && r.json?.fix === undefined && r.json?.sec_disclaimer === D6, JSON.stringify(r.json));
+	check("a /.well-known request reaches no card (404 not_found, MCP-NF-OPEN line, no card URL)", r.status === 404 && r.json?.error === "not_found" && r.json?.fix === NF_OPEN && r.json?.sec_disclaimer === D6, JSON.stringify(r.json));
 }
 
 /* ------------------------------------------------------------------ */
@@ -259,14 +262,19 @@ section("D. every refusal is a code plus a one-line fix");
 		["keyed 404", () => req("/health/x", { method: "GET" }), 404, "not_found"],
 		["health 405", () => req("/health", { method: "POST" }), 405, "get_only"],
 	];
-	// Re-stated (pointer-gate B): a closed-gate case gets no fix, because the
-	// not_found line names the endpoint that is closed.
-	// not_found never carries a fix now: its certified line names the card.
-	const CLOSED = new Set(["public 404 (closed gate)", "openapi 404 (closed)", "public 404 (other path)", "keyed 404"]);
+	// Ruling D4 3.1: not_found carries MCP-NF-CLOSED while the gate is closed
+	// and MCP-NF-OPEN while it is open; every other refusal has its own line.
+	const EXPECT_FIX = {
+		"public 404 (closed gate)": NF_CLOSED,
+		"openapi 404 (closed)": NF_CLOSED,
+		"public 404 (other path)": NF_OPEN,
+		"keyed 404": NF_OPEN,
+	};
 	for (const [label, run, status, code] of cases) {
 		const r = await run();
-		const fixOk = CLOSED.has(label) ? r.json?.fix === undefined : isFixLine(r.json?.fix) && !r.json.fix.includes(D6);
-		check(`${label}: HTTP ${status}, error=${code}, ${CLOSED.has(label) ? "no fix" : "one-line fix"}, D6 disclaimer`, r.status === status && r.json?.error === code && fixOk && r.json?.sec_disclaimer === D6 && r.json?.disclaimer === undefined, `${r.status} ${JSON.stringify(r.json)}`);
+		const want = EXPECT_FIX[label];
+		const fixOk = want !== undefined ? r.json?.fix === want : isFixLine(r.json?.fix) && !r.json.fix.includes(D6);
+		check(`${label}: HTTP ${status}, error=${code}, ${want !== undefined ? "exact not_found line" : "one-line fix"}, D6 disclaimer`, r.status === status && r.json?.error === code && fixOk && r.json?.sec_disclaimer === D6 && r.json?.disclaimer === undefined, `${r.status} ${JSON.stringify(r.json)}`);
 	}
 	const k = await req("/mcp", { body: INIT, headers: J });
 	check("keyed 401 fix points at the no-key endpoint", typeof k.json?.fix === "string" && k.json.fix.includes(PUBLIC_URL));
@@ -305,6 +313,9 @@ section("E. the refusal vocabulary is one line each and passes the wording rule"
 	check("refusals module exports REFUSAL_FIX", entries.length > 0);
 	check("every fix is one line, at most 200 chars", entries.every(([, f]) => isFixLine(f)), entries.filter(([, f]) => !isFixLine(f)).map(([k]) => k).join(","));
 	check("no barred wording-guard word in a fix", entries.every(([, f]) => !/\b(verif\w*|vetted|audited)\b/i.test(f)));
+	// MCP-IE-0: no HTTP surface has a payment path, so no fix may imply one.
+	check("internal_error is MCP-IE-0 exactly", REFUSAL_FIX?.internal_error === "Something failed on our side. Retry later.", REFUSAL_FIX?.internal_error);
+	check("no HTTP fix line mentions a payment", entries.every(([, f]) => !/\bpayment|\bresend\b/i.test(f)), entries.filter(([, f]) => /\bpayment|\bresend\b/i.test(f)).map(([k]) => k).join(","));
 }
 
 await new Promise((r) => http.close(r));

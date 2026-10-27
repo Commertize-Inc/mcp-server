@@ -232,6 +232,22 @@ section("C. production wiring: the keyed handler follows the public gate");
 	}
 }
 
+section("E. not_found lines and the JSON-RPC branch follow the gate (ruling D4 3.1)");
+{
+	const r = await tryImport("refusals.js");
+	check("not_found closed is MCP-NF-CLOSED", r.fixFor?.("not_found", false) === "Unknown path. Check the URL and the HTTP method.", r.fixFor?.("not_found", false));
+	check("not_found open is MCP-NF-OPEN", r.fixFor?.("not_found", true) === "Unknown path. The no-key MCP endpoint is POST https://agents.commertize.com/mcp/public.", r.fixFor?.("not_found", true));
+	check("no fix line names the agent card", Object.values(r.REFUSAL_FIX ?? {}).every((f) => !f.includes("agent-card")));
+	// A pointer code reached through the JSON-RPC branch must be gated too.
+	// -32601 maps to tool_not_public; plant a pointer line on it for the check.
+	const rpc = (open) => r.withFix?.(404, { jsonrpc: "2.0", id: 1, error: { code: -32601, message: "x" } }, open);
+	const closedRpc = rpc(false);
+	check("RPC branch carries data.error and a fix", closedRpc?.error?.data?.error === "tool_not_public" && typeof closedRpc?.error?.data?.fix === "string");
+	const src = (await import("node:fs")).readFileSync(new URL("../src/refusals.ts", import.meta.url), "utf8");
+	check("RPC branch routes through fixFor, not REFUSAL_FIX directly", /const fix = fixFor\(code, publicOpen\);\s*return \{\s*\.\.\.b,\s*error:/.test(src));
+	check("publicOpen is required in fixFor, refusalBody and withFix", !/publicOpen = false/.test(src) && !/publicOpen\?:/.test((await import("node:fs")).readFileSync(new URL("../src/httpServer.ts", import.meta.url), "utf8")));
+}
+
 section("D. /health reports which endpoints accept tool calls, from the same gate");
 {
 	publicOpen = true;

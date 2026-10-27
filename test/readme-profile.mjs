@@ -77,7 +77,7 @@ section("README carries no dated route-verification claim and no single-class le
 	check("no 'real estate' in README", !/real[- ]estate/i.test(README));
 }
 
-// legal review RULING_verification_noun_2026-10-24 §1: no /verif/i in any form in
+// legal review ruling on the verification noun (2026-10-24), section 1: no /verif/i in any form in
 // copy a reader sees. The README, glama.json, package.json and the bundled
 // skill/content files are republished by directories, so all of them count.
 section("no 'verif' stem in any republished file");

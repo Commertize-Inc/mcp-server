@@ -17,8 +17,8 @@
  */
 
 /**
- * D6 (legal review RULING_sec_ui_statement_mcp_2026-10-20; text CERTIFIED in
- * CERT_front_door_copy_2026-10-20 §1, byte for byte). One field name
+ * D6 (legal review ruling on the SEC status statement, 2026-10-20; text
+ * cleared in the front-door copy review, section 1, byte for byte). One field name
  * everywhere (cert §8): `sec_disclaimer` on the agent card, every refusal
  * body, JSON-RPC `error.data`, and tool results (whose `disclaimer` field
  * keeps D-1). Never in `disclaimer`, never edited or merged into `fix`.
@@ -30,7 +30,8 @@ export const PUBLIC_ENDPOINT_URL = "https://agents.commertize.com/mcp/public";
 export const AGENT_CARD_URL = "https://agents.commertize.com/.well-known/agent-card.json";
 
 export const REFUSAL_FIX = Object.freeze({
-	not_found: `Unknown path. The no-key MCP endpoint is POST ${PUBLIC_ENDPOINT_URL}; the agent card is at ${AGENT_CARD_URL}.`,
+	// MCP-NF-OPEN (apx-9bd2608f05); sent only while the public endpoint is open.
+	not_found: `Unknown path. The no-key MCP endpoint is POST ${PUBLIC_ENDPOINT_URL}.`,
 	method_not_allowed: "Use POST with a JSON-RPC 2.0 body. This endpoint keeps no session and opens no stream.",
 	origin_not_allowed: "Call from a server-side client without an Origin header; browser origins other than agents.commertize.com are refused.",
 	rate_limited: "Too many requests from this client. Wait for the Retry-After seconds, then retry.",
@@ -40,7 +41,9 @@ export const REFUSAL_FIX = Object.freeze({
 	parse_error: "The body is not valid JSON. Send one JSON-RPC 2.0 message.",
 	batch_refused: "JSON-RPC batches are not accepted. Send one message per request.",
 	tool_not_public: "That tool is not on the no-key surface. Call tools/list for the tools you can use.",
-	internal_error: "Something failed on our side. Retry later; if you sent a payment, resend the same one, never a new one.",
+	// MCP-IE-0 (apx-5ef9717ea7). No HTTP surface registers a payment tool (x402 is
+	// stdio-only, httpAllowlist.ts), so the payment clause is struck everywhere here.
+	internal_error: "Something failed on our side. Retry later.",
 	missing_credential: `No key is needed for the public tools: POST ${PUBLIC_ENDPOINT_URL} (initialize, then tools/list).`,
 	malformed_credential: `This endpoint needs a Commertize agent key. Without one, use POST ${PUBLIC_ENDPOINT_URL}.`,
 	invalid_credential: `This key is not valid here. Without a key, use POST ${PUBLIC_ENDPOINT_URL}.`,
@@ -79,7 +82,11 @@ export const CARD_CODES: ReadonlySet<RefusalCode> = new Set(
  * the gate never advertises it. The line is left out rather than replaced,
  * so there is no uncertified copy.
  */
-export const fixFor = (code: RefusalCode, publicOpen = false): string | undefined => {
+/** MCP-NF-CLOSED (apx-803346764c): the not_found line while the public endpoint is closed. It names no URL. */
+export const NOT_FOUND_CLOSED = "Unknown path. Check the URL and the HTTP method.";
+
+export const fixFor = (code: RefusalCode, publicOpen: boolean): string | undefined => {
+	if (code === "not_found" && !publicOpen) return NOT_FOUND_CLOSED;
 	if (CARD_CODES.has(code)) return undefined;
 	return publicOpen || !POINTER_CODES.has(code) ? REFUSAL_FIX[code] : undefined;
 };
@@ -87,8 +94,8 @@ export const fixFor = (code: RefusalCode, publicOpen = false): string | undefine
 /** The HTTP body for a refusal: the stable code plus its one-line fix. */
 export const refusalBody = (
 	code: RefusalCode,
-	extra: Record<string, unknown> = {},
-	publicOpen = false
+	extra: Record<string, unknown>,
+	publicOpen: boolean
 ) => {
 	const fix = fixFor(code, publicOpen);
 	return {
@@ -115,7 +122,7 @@ const isRefusalCode = (c: unknown): c is RefusalCode =>
  * JSON-RPC error gains `data: { error, fix }`. Bodies that already carry a
  * fix, success bodies, and unknown codes are returned unchanged.
  */
-export const withFix = (status: number, body: unknown, publicOpen = false): unknown => {
+export const withFix = (status: number, body: unknown, publicOpen: boolean): unknown => {
 	if (status < 400 || !body || typeof body !== "object") return body;
 	const b = body as Record<string, unknown>;
 	if ("fix" in b) return body;
@@ -126,11 +133,17 @@ export const withFix = (status: number, body: unknown, publicOpen = false): unkn
 	const e = b.error as { code?: unknown; data?: unknown } | undefined;
 	if (e && typeof e === "object" && e.data === undefined && typeof e.code === "number") {
 		const code = RPC_CODE_REFUSAL[e.code];
-		if (code)
+		if (code) {
+			// Through fixFor, so a future pointer line cannot bypass the gate.
+			const fix = fixFor(code, publicOpen);
 			return {
 				...b,
-				error: { ...e, data: { error: code, fix: REFUSAL_FIX[code], sec_disclaimer: D6_DISCLAIMER } },
+				error: {
+					...e,
+					data: { error: code, ...(fix === undefined ? {} : { fix }), sec_disclaimer: D6_DISCLAIMER },
+				},
 			};
+		}
 	}
 	return body;
 };

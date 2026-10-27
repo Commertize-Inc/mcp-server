@@ -133,6 +133,7 @@ const verifier = {
 const PER_IP = 3;
 const verifyLimiter = new FixedWindowLimiter(PER_IP, 60_000);
 const handler = createHttpHandler({
+	publicOpen: () => false,
 	verifier,
 	requestLimiter: new FixedWindowLimiter(1000, 60_000),
 	inquiryLimiter: new FixedWindowLimiter(1000, 60_000),

@@ -64,7 +64,7 @@ export interface HttpHandlerOptions {
 	 * that point there are sent only while it is (refusals.ts `fixFor`).
 	 * Absent = closed: a handler that is not told never advertises it.
 	 */
-	publicOpen?: () => boolean;
+	publicOpen: () => boolean;
 }
 
 export type NodeHandler = (
@@ -112,7 +112,7 @@ const rpcError = (id: unknown, code: number, message: string) => ({
  * or larger, so a full IPv6 address is not a stable client identity: one
  * host can rotate through 2^64 of them and get a fresh brake bucket each
  * time. IPv4 and IPv4-mapped forms pass through. Mirrors the backend's
- * `toBucketKey` (apps/backend/src/utils/clientIp.ts) line for line, so both
+ * `toBucketKey` in the Commertize API line for line, so both
  * brakes bucket one client the same way.
  */
 export const toBucketKey = (ip: string): string => {
@@ -177,7 +177,7 @@ export const createHttpHandler = (o: HttpHandlerOptions): NodeHandler => {
 			extra: Record<string, string> = {}
 		): void => {
 			res.writeHead(status, { ...JSON_HEADERS, ...extra });
-			res.end(JSON.stringify(withFix(status, body, o.publicOpen?.() === true)));
+			res.end(JSON.stringify(withFix(status, body, o.publicOpen() === true)));
 		};
 
 		try {
@@ -201,7 +201,7 @@ export const createHttpHandler = (o: HttpHandlerOptions): NodeHandler => {
 					// endpoint that refuses calls (or the reverse).
 					toolCalls: {
 						"/mcp": o.verifier.configured,
-						"/mcp/public": o.publicOpen?.() === true,
+						"/mcp/public": o.publicOpen() === true,
 					},
 				});
 				return;

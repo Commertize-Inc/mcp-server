@@ -125,19 +125,23 @@ export const toBucketKey = (ip: string): string => {
 };
 
 /**
- * The client's address for the verification brake. Vercel sets
- * `x-vercel-forwarded-for` at its proxy and strips it from inbound traffic;
- * `x-real-ip` is the Node runtime's; the socket is the local case. The raw
- * `x-forwarded-for` is caller-settable and is NOT consulted. No address at
+ * The client's address for the verification brake and the relay identity.
+ * ON VERCEL ONLY (`process.env.VERCEL === "1"`, exact string, read per call)
+ * the proxy-set `x-vercel-forwarded-for`, then `x-real-ip`, are trusted. Off
+ * Vercel (self-host, local) both are caller-settable, so they are
+ * IGNORED and only the socket address counts (gate R-1, security review L-1):
+ * a forged header must never create fresh buckets or burn a victim's. Any other
+ * VERCEL value counts as off (fail-closed). The raw `x-forwarded-for` is
+ * caller-settable and is never consulted. No address at
  * all shares one bucket, which brakes harder, never softer. IPv6 is bucketed
  * by /64 (see `toBucketKey`).
  */
 export const clientIpOf = (req: IncomingMessage): string => {
 	const one = (v: string | string[] | undefined): string =>
 		((Array.isArray(v) ? v[0] : v) ?? "").split(",")[0]?.trim() ?? "";
+	const onVercel = process.env.VERCEL === "1";
 	const ip =
-		one(req.headers["x-vercel-forwarded-for"]) ||
-		one(req.headers["x-real-ip"]) ||
+		(onVercel ? one(req.headers["x-vercel-forwarded-for"]) || one(req.headers["x-real-ip"]) : "") ||
 		req.socket?.remoteAddress ||
 		"";
 	return ip ? toBucketKey(ip) : "unknown";

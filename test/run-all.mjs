@@ -39,6 +39,7 @@ const SUITES = [
 	["deployment gates (offline)", "gates-e2e.mjs", { live: false }],
 	["streamable http e2e (stub upstream)", "http-e2e.mjs", { live: false }],
 	["client ip /64 bucketing (offline)", "client-ip.mjs", { live: false }],
+	["platform reads e2e (stub upstream)", "platform-reads-e2e.mjs", { live: false }],
 	["language", "language-check.mjs", { live: false }],
 ];
 

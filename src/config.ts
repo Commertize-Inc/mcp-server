@@ -157,6 +157,18 @@ export const config = {
 		process.env.COMMERTIZE_MCP_DISABLE_INQUIRY === "1" ||
 		process.env.COMMERTIZE_MCP_ENABLE_INQUIRY !== "1",
 
+	/**
+	 * Gate for the platform read tools (`platformTools.ts`): the reference
+	 * index, the latest Intelligence issue and the Work board. Their API routes are on the backend's main branch but
+	 * were not served by api.commertize.com when this gate was written
+	 * (probed 2026-10-27: 404), so a registry-installed server must not
+	 * list them. Same fail-closed parse as every other gate: only the exact
+	 * string "1" opens it, and DISABLE beats ENABLE.
+	 */
+	platformReadsDisabled:
+		process.env.COMMERTIZE_MCP_DISABLE_PLATFORM_READS === "1" ||
+		process.env.COMMERTIZE_MCP_ENABLE_PLATFORM_READS !== "1",
+
 	/* ---------------------------------------------------------------- */
 	/* Streamable HTTP transport (remote MCP)                            */
 	/* ---------------------------------------------------------------- */

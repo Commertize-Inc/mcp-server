@@ -60,7 +60,17 @@ const BODIES = {
 	"/api/work/v1/tasks": {
 		schema: "commertize.work.v1",
 		strings_ref: WORK_REF,
-		tasks: [{ id: "t1", status: "open" }],
+		tasks: [
+			{
+				task_id: "t1",
+				status: "open",
+				title_key: "work.task.t1",
+				description: "third-party prose must not travel",
+				acceptance: { method: "exact", note: "dropped" },
+				deadline: "x".repeat(200),
+				submissions_count: 3,
+			},
+		],
 	},
 };
 
@@ -214,7 +224,28 @@ section("3. served route: content, verbatim captions, deployed");
 }
 {
 	const { payload } = await call(client, "list_work_tasks");
-	check("work: tasks passed through", payload.data?.[0]?.id === "t1");
+	check(
+		"work: allowlisted fields pass",
+		payload.data?.[0]?.task_id === "t1" &&
+			payload.data?.[0]?.title_key === "work.task.t1",
+	);
+	check(
+		"work: unlisted free text dropped",
+		!("description" in (payload.data?.[0] ?? {})),
+	);
+	check(
+		"work: unlisted nested key dropped",
+		payload.data?.[0]?.acceptance?.method === "exact" &&
+			!("note" in (payload.data?.[0]?.acceptance ?? {})),
+	);
+	check(
+		"work: overlong string dropped",
+		!("deadline" in (payload.data?.[0] ?? {})),
+	);
+	check(
+		"work: non-string value dropped",
+		!("submissions_count" in (payload.data?.[0] ?? {})),
+	);
 	check(
 		"work: strings_ref caption verbatim",
 		payload.api_captions?.strings_ref === WORK_REF,
@@ -278,6 +309,10 @@ section("4. not deployed and restricted return no data");
 	);
 	check("500: retryable", payload.error?.retryable === true);
 	check("500: data null", payload.data === null);
+	check(
+		"500: deployment unknown, not deployed",
+		payload.deployment?.status === "unknown",
+	);
 }
 
 section("5. shape guards");

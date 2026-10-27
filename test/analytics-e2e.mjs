@@ -21,7 +21,7 @@ import { createServer as createNodeServer } from "node:http";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { check, resetCounters, section, summary } from "./harness.mjs";
+import { check, LOOPBACK, resetCounters, section, summary } from "./harness.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const DIST = path.resolve(HERE, "..", "dist");
@@ -37,8 +37,8 @@ const upstream = createNodeServer((req, res) => {
 	if (url.pathname.startsWith("/api/news/")) return json(404, { error: "Article not found" });
 	res.writeHead(404).end();
 });
-await new Promise((r) => upstream.listen(0, "127.0.0.1", r));
-process.env.COMMERTIZE_API_BASE_URL = `http://127.0.0.1:${upstream.address().port}`;
+await new Promise((r) => upstream.listen(0, LOOPBACK, r));
+process.env.COMMERTIZE_API_BASE_URL = `http://${LOOPBACK}:${upstream.address().port}`;
 
 const { analyticsConfigFrom, createAnalyticsSink, toCapture, uaProductOf, ANALYTICS_DISTINCT_ID, ANALYTICS_EVENT } = await import(path.join(DIST, "analytics.js"));
 const { createPublicHttpHandler } = await import(path.join(DIST, "httpPublic.js"));
@@ -215,8 +215,8 @@ section("5. end to end through the public handler");
 		afterResponse: sink,
 	});
 	const srv = createNodeServer((req, res) => void handler(req, res));
-	await new Promise((r) => srv.listen(0, "127.0.0.1", r));
-	const URLP = `http://127.0.0.1:${srv.address().port}/mcp/public`;
+	await new Promise((r) => srv.listen(0, LOOPBACK, r));
+	const URLP = `http://${LOOPBACK}:${srv.address().port}/mcp/public`;
 	const call = (name, args = {}) =>
 		fetch(URLP, {
 			method: "POST",
@@ -265,8 +265,8 @@ section("5. end to end through the public handler");
 		},
 	});
 	const srv2 = createNodeServer((req, res) => void broken(req, res));
-	await new Promise((r) => srv2.listen(0, "127.0.0.1", r));
-	const r2 = await fetch(`http://127.0.0.1:${srv2.address().port}/mcp/public`, {
+	await new Promise((r) => srv2.listen(0, LOOPBACK, r));
+	const r2 = await fetch(`http://${LOOPBACK}:${srv2.address().port}/mcp/public`, {
 		method: "POST",
 		headers: { "content-type": "application/json", accept: "application/json, text/event-stream" },
 		body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "get_news", arguments: {} } }),
@@ -394,8 +394,8 @@ section("10. end to end: initialize/tools-list with ?src= on /mcp/public, auth f
 		afterResponse: sink,
 	});
 	const srv = createNodeServer((req, res) => void handler(req, res));
-	await new Promise((r) => srv.listen(0, "127.0.0.1", r));
-	const base = `http://127.0.0.1:${srv.address().port}/mcp/public`;
+	await new Promise((r) => srv.listen(0, LOOPBACK, r));
+	const base = `http://${LOOPBACK}:${srv.address().port}/mcp/public`;
 	const H = { "content-type": "application/json", accept: "application/json, text/event-stream", "user-agent": "Mozilla/5.0 SECRETUA", "x-vercel-forwarded-for": "203.0.113.50" };
 	const init = { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "cursor", version: "1.7.0" } } };
 	let r = await fetch(`${base}?src=glama`, { method: "POST", headers: H, body: JSON.stringify(init) });
@@ -442,13 +442,13 @@ section("10. end to end: initialize/tools-list with ?src= on /mcp/public, auth f
 		afterResponse: ksink,
 	});
 	const ksrv = createNodeServer((req, res) => void keyedHandler(req, res));
-	await new Promise((res) => ksrv.listen(0, "127.0.0.1", res));
-	const kurl = `http://127.0.0.1:${ksrv.address().port}/mcp?src=anthropic`;
+	await new Promise((res) => ksrv.listen(0, LOOPBACK, res));
+	const kurl = `http://${LOOPBACK}:${ksrv.address().port}/mcp?src=anthropic`;
 	const call = { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "get_news", arguments: {} } };
 	await (await fetch(kurl, { method: "POST", headers: H, body: JSON.stringify(call) })).text();
 	await (await fetch(kurl, { method: "POST", headers: { ...H, authorization: "Bearer cfa_WRONGSECRETKEY" }, body: JSON.stringify(call) })).text();
 	await (await fetch(kurl, { method: "POST", headers: { ...H, authorization: "Bearer cfa_SECRETKEY" }, body: JSON.stringify(call) })).text();
-	await (await fetch(`http://127.0.0.1:${ksrv.address().port}/health`)).text();
+	await (await fetch(`http://${LOOPBACK}:${ksrv.address().port}/health`)).text();
 	await new Promise((res) => setTimeout(res, 50));
 	check("keyed: missing, invalid, ok, /health -> auth_failure, auth_failure, tool_call (health sends nothing)", kcap.map((c) => c.event).join(",") === "mcp_auth_failure,mcp_auth_failure,mcp_tool_call", kcap.map((c) => c.event).join(","));
 	check("keyed auth failures carry the code only", kcap[0]?.properties.error_code === "missing_credential" && kcap[1]?.properties.error_code === "invalid_credential" && kcap.slice(0, 2).every((c) => !("key_id" in c.properties)));

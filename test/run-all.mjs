@@ -39,6 +39,8 @@ const SUITES = [
 	["deployment gates (offline)", "gates-e2e.mjs", { live: false }],
 	["streamable http e2e (stub upstream)", "http-e2e.mjs", { live: false }],
 	["get_news class/since (stub upstream)", "news-filters.mjs", { live: false }],
+	["since and cache bound (stub upstream)", "since-cache.mjs", { live: false }],
+	["version pin (offline)", "version-pin.mjs", { live: false }],
 	["client ip /64 bucketing (offline)", "client-ip.mjs", { live: false }],
 	["platform reads e2e (stub upstream)", "platform-reads-e2e.mjs", { live: false }],
 	["public no-login endpoint e2e (stub upstream)", "public-e2e.mjs", { live: false }],

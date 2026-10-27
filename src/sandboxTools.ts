@@ -71,7 +71,7 @@ const BASE = "/api/agents/sandbox";
  * reassurance.
  *
  * This is a copy of a constant that lives in another repository
- * (`apps/backend/src/sandbox/universe.ts`), which is a real seam: nothing here
+ * (the Commertize API simulation universe), which is a real seam: nothing here
  * can import it. `sandbox-e2e.mjs` asserts every description carries this exact
  * string, so a drift shows up as a failed test rather than as two subtly
  * different badges.

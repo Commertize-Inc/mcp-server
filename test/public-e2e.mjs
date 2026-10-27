@@ -34,7 +34,7 @@ import { createServer as createNodeServer } from "node:http";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { check, DISCLAIMER, resetCounters, section, summary } from "./harness.mjs";
+import { check, DISCLAIMER, LOOPBACK, resetCounters, section, summary } from "./harness.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const DIST = path.resolve(HERE, "..", "dist");
@@ -107,8 +107,8 @@ const upstream = createNodeServer((req, res) => {
 	res.writeHead(404, { "content-type": "text/plain" });
 	res.end("404 Not Found");
 });
-await new Promise((r) => upstream.listen(0, "127.0.0.1", r));
-const UPSTREAM = `http://127.0.0.1:${upstream.address().port}`;
+await new Promise((r) => upstream.listen(0, LOOPBACK, r));
+const UPSTREAM = `http://${LOOPBACK}:${upstream.address().port}`;
 
 process.env.COMMERTIZE_API_BASE_URL = UPSTREAM;
 // Gates that would register more tools on other surfaces are OPEN on purpose:
@@ -141,8 +141,8 @@ const server = createNodeServer((req, res) => {
 		if (!res.headersSent) res.writeHead(500).end();
 	});
 });
-await new Promise((r) => server.listen(0, "127.0.0.1", r));
-const BASE = `http://127.0.0.1:${server.address().port}`;
+await new Promise((r) => server.listen(0, LOOPBACK, r));
+const BASE = `http://${LOOPBACK}:${server.address().port}`;
 const URL_PUBLIC = `${BASE}${PUBLIC_PATH}`;
 
 const INIT = {

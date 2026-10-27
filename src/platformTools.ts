@@ -48,7 +48,58 @@ export const CAPTION_KEYS = [
 	"strings_ref",
 ] as const;
 
-export type DeploymentStatus = "deployed" | "not_deployed" | "restricted";
+export type DeploymentStatus =
+	| "deployed"
+	| "not_deployed"
+	| "restricted"
+	| "unknown";
+
+/**
+ * Work board field allowlist. The board is written by Commertize today, but a
+ * relay must not pass on text a third party could someday put in a task, so
+ * only these keys survive, only as short strings (ids, keys, timestamps,
+ * amounts), and nested objects are allowlisted the same way. Anything else is
+ * dropped, never coerced.
+ */
+const WORK_TASK_KEYS = [
+	"task_id",
+	"task_version",
+	"task_class",
+	"title_key",
+	"status",
+	"required_kya_tier",
+	"submissions_count",
+	"deadline",
+	"posted_at",
+] as const;
+const WORK_NESTED_KEYS: Record<string, readonly string[]> = {
+	acceptance: ["method", "value_kind", "tolerance"],
+	source: ["dataset_key", "snapshot_sha256"],
+	task_fee: ["amount", "asset", "chain"],
+};
+export const WORK_VALUE_MAX = 128;
+const shortString = (v: unknown): v is string =>
+	typeof v === "string" &&
+	v.length <= WORK_VALUE_MAX &&
+	!/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(v);
+
+export const sanitizeWorkTask = (raw: unknown): Record<string, unknown> => {
+	const out: Record<string, unknown> = {};
+	if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
+	const rec = raw as Record<string, unknown>;
+	for (const k of WORK_TASK_KEYS) if (shortString(rec[k])) out[k] = rec[k];
+	for (const [k, keys] of Object.entries(WORK_NESTED_KEYS)) {
+		const v = rec[k];
+		if (!v || typeof v !== "object" || Array.isArray(v)) continue;
+		const inner: Record<string, string> = {};
+		for (const ik of keys) {
+			const iv = (v as Record<string, unknown>)[ik];
+			if (shortString(iv)) inner[ik] = iv;
+		}
+		out[k] = inner;
+	}
+	return out;
+};
 
 /**
  * Copy the API's caption strings verbatim. Only strings, and arrays of
@@ -75,9 +126,9 @@ export const extractCaptions = (body: unknown): Record<string, string> => {
 const deploymentShape = z
 	.object({
 		status: z
-			.enum(["deployed", "not_deployed", "restricted"])
+			.enum(["deployed", "not_deployed", "restricted", "unknown"])
 			.describe(
-				"deployed: the API served this route. not_deployed: the API does not serve it yet (built is not deployed). restricted: the API requires a signed-in session this server does not hold.",
+				"deployed: the API served this route. not_deployed: the API does not serve it yet (built is not deployed). restricted: the API requires a signed-in session this server does not hold. unknown: the API timed out, was unreachable or failed, so deployment could not be observed.",
 			),
 		route: z.string().describe("The API path this tool reads."),
 	})
@@ -156,8 +207,8 @@ export const readRoute = async (
 				url,
 				empty(route, "restricted"),
 			);
-		// Any other failure says nothing about deployment; report what is known.
-		return fail(err, url, empty(route, "deployed"));
+		// A timeout, unreachable API or 5xx says nothing about deployment.
+		return fail(err, url, empty(route, "unknown"));
 	}
 };
 
@@ -213,7 +264,7 @@ export const registerPlatformTools = (server: McpServer): void => {
 		// board: "no tasks" and "the API sent no list" are different facts.
 		async () =>
 			readRoute(ROUTES.list_work_tasks, (b) =>
-				Array.isArray(b.tasks) ? b.tasks : null,
+				Array.isArray(b.tasks) ? b.tasks.map(sanitizeWorkTask) : null,
 			),
 	);
 };

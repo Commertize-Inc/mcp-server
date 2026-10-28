@@ -30,6 +30,10 @@ export const envelopeShape = {
 	disclaimer: z
 		.string()
 		.describe("Standing disclaimer. Carry it into anything you report to a user."),
+	sec_disclaimer: z
+		.string()
+		.optional()
+		.describe("Regulatory disclaimer carried on the no-login endpoint. Carry it with the standing disclaimer."),
 	error: z
 		.object({
 			code: z.string(),

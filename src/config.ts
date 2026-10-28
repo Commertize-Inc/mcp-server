@@ -54,6 +54,12 @@ export const config = {
 	 */
 	staleMaxMs: int(process.env.COMMERTIZE_STALE_MAX_MS, 15 * 60_000),
 
+	/**
+	 * Fresh upstream news fetches allowed per minute, per instance (http.ts
+	 * budgetFor). Unset, empty, zero or garbage falls back to 60.
+	 */
+	upstreamNewsPerMinute: int(process.env.COMMERTIZE_MCP_UPSTREAM_NEWS_RPM, 60),
+
 	/** Per-request timeout against the upstream API. */
 	requestTimeoutMs: int(process.env.COMMERTIZE_REQUEST_TIMEOUT_MS, 10_000),
 

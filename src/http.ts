@@ -13,8 +13,10 @@
  */
 
 import { config } from "./config.js";
+import { FixedWindowLimiter } from "./httpRateLimit.js";
 
 export type ApiErrorCode =
+	| "RATE_LIMITED"
 	| "UPSTREAM_TIMEOUT"
 	| "UPSTREAM_UNREACHABLE"
 	| "UPSTREAM_ERROR"
@@ -74,6 +76,26 @@ const inFlight = new Map<string, Promise<CacheEntry>>();
 const NOT_FOUND_MAX = 1000;
 const notFound = new Map<string, { err: ApiError; at: number }>();
 
+/**
+ * Per-instance upstream budget for the news route. Every public caller reaches
+ * the API from this server's address, so they all share the API's single
+ * per-IP news budget (120/min). Spending at most
+ * COMMERTIZE_MCP_UPSTREAM_NEWS_RPM (default 60) fresh fetches per minute per
+ * instance keeps one busy instance from exhausting it. Cache hits and
+ * de-duplicated in-flight reads cost nothing. With N instances the total is up
+ * to N times the value; a separate API-side identity for this server is the
+ * follow-up if upstream 429s appear at the default.
+ */
+const UPSTREAM_BUDGET_PREFIXES = ["/api/news"] as const;
+let newsBudget: FixedWindowLimiter | null = null;
+const budgetFor = (path: string): FixedWindowLimiter | null => {
+	if (!UPSTREAM_BUDGET_PREFIXES.some((p) => path === p || path.startsWith(`${p}?`) || path.startsWith(`${p}/`))) {
+		return null;
+	}
+	newsBudget ??= new FixedWindowLimiter(config.upstreamNewsPerMinute, 60_000);
+	return newsBudget;
+};
+
 /** Test seam: how many bodies the positive cache holds. */
 export const cacheSize = (): number => cache.size;
 
@@ -82,6 +104,7 @@ export const clearCache = (): void => {
 	cache.clear();
 	inFlight.clear();
 	notFound.clear();
+	newsBudget = null;
 };
 
 const ageSeconds = (fetchedAt: number): number =>
@@ -170,6 +193,29 @@ export const getJson = async <T>(path: string): Promise<ApiResult<T>> => {
 
 	let pending = inFlight.get(url);
 	if (!pending) {
+		const budget = budgetFor(path);
+		if (budget) {
+			const verdict = budget.hit("upstream");
+			if (!verdict.allowed) {
+				// Past this instance's upstream budget: a labelled stale body if one
+				// exists, otherwise a coded refusal. Never an upstream call.
+				if (cached && Date.now() - cached.fetchedAt < config.staleMaxMs) {
+					return {
+						body: cached.body as T,
+						fetchedAt: new Date(cached.fetchedAt),
+						cache: { hit: true, age_seconds: ageSeconds(cached.fetchedAt), stale: true },
+						sourceUrl: url,
+					};
+				}
+				throw new ApiError({
+					code: "RATE_LIMITED",
+					message: `Too many reads right now. Retry after ${verdict.retryAfterSeconds}s.`,
+					retryable: true,
+					status: 429,
+					sourceUrl: url,
+				});
+			}
+		}
 		pending = fetchFresh(url);
 		inFlight.set(url, pending);
 		// Detach cleanup from the caller's error path so a rejection here is

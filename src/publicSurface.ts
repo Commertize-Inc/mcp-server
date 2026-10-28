@@ -53,8 +53,16 @@ export const PUBLIC_ERROR_MESSAGES: Readonly<Record<string, string>> = {
 	UPSTREAM_UNREACHABLE: "The upstream service is unavailable. Retry later.",
 	UPSTREAM_ERROR: "The upstream service is unavailable. Retry later.",
 	UPSTREAM_BAD_BODY: "The upstream service is unavailable. Retry later.",
+	// Certified apx-4f9b9bfc8d: only for the exhausted-budget, no-cached-copy path.
+	RATE_LIMITED: "Too many reads right now. Retry later.",
 	INTERNAL_ERROR: "Internal error",
 };
+
+/**
+ * Fixed wait on a public RATE_LIMITED: the upstream budget window (http.ts),
+ * a constant, so it carries no per-request state.
+ */
+export const PUBLIC_RATE_LIMITED_RETRY_AFTER_SECONDS = 60;
 export const publicErrorMessageFor = (code: unknown): string =>
 	(typeof code === "string" && Object.hasOwn(PUBLIC_ERROR_MESSAGES, code)
 		? PUBLIC_ERROR_MESSAGES[code]
@@ -104,7 +112,12 @@ export const withPublicDisclaimer = (
 		} catch {
 			/* a log sink never changes a result */
 		}
-		structured.error = { code, message: publicErrorMessageFor(code), retryable: e.retryable === true };
+		structured.error = {
+			code,
+			message: publicErrorMessageFor(code),
+			retryable: e.retryable === true,
+			...(code === "RATE_LIMITED" ? { retry_after_seconds: PUBLIC_RATE_LIMITED_RETRY_AFTER_SECONDS } : {}),
+		};
 		structured.source_url = "";
 	}
 	return {

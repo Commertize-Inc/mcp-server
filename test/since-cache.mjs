@@ -82,6 +82,8 @@ section("3. the response cache is bounded");
 {
 	process.env.COMMERTIZE_API_BASE_URL = BASE;
 	process.env.COMMERTIZE_CACHE_MAX_ENTRIES = "50";
+	// This section measures the cache bound, not the upstream budget (section 4).
+	process.env.COMMERTIZE_MCP_UPSTREAM_NEWS_RPM = "100000";
 	const http = await import(dist("http.js"));
 	http.clearCache();
 	const heapBefore = process.memoryUsage().heapUsed;
@@ -98,6 +100,60 @@ section("3. the response cache is bounded");
 	check("the oldest key was evicted", evicted.cache.hit === false);
 	const heapGrowthMb = (process.memoryUsage().heapUsed - heapBefore) / 1e6;
 	check("heap growth over 300 URLs stays small (< 20 MB)", heapGrowthMb < 20, heapGrowthMb.toFixed(2));
+}
+
+section("4. per-instance upstream news budget (child process, budget 3)");
+{
+	// config is read at import, so the budget runs in a fresh child.
+	// Async spawn: the stub upstream lives in THIS process's event loop.
+	const { spawn, spawnSync } = await import("node:child_process");
+	const runChild = (code, env) =>
+		new Promise((resolve) => {
+			const c = spawn(process.execPath, ["--input-type=module", "-e", code], { env });
+			let stdout = "";
+			let stderr = "";
+			c.stdout.on("data", (b) => (stdout += b));
+			c.stderr.on("data", (b) => (stderr += b));
+			c.on("close", () => resolve({ stdout, stderr }));
+		});
+	const probe = `
+		const http = await import(${JSON.stringify(dist("http.js"))});
+		const out = [];
+		const n0 = await http.getJson("/api/news?limit=1&since=a");
+		for (const k of ["b", "c"]) await http.getJson("/api/news?limit=1&since=" + k);
+		await new Promise((r) => setTimeout(r, 1100));
+		const stale = await http.getJson("/api/news?limit=1&since=a");
+		out.push({ stale: stale.cache.stale, hit: stale.cache.hit });
+		try { await http.getJson("/api/news?limit=1&since=z"); out.push({ threw: false }); }
+		catch (e) { out.push({ threw: true, code: e.code, status: e.status, retryable: e.retryable, msg: e.message }); }
+		const listings = await http.getJson("/api/listings?x=1");
+		out.push({ listingsOk: listings.cache.hit === false });
+		process.stdout.write(JSON.stringify({ out, first: n0.cache }));
+	`;
+	const before = newsCalls.length;
+	const r = await runChild(probe, {
+		...process.env,
+		COMMERTIZE_API_BASE_URL: BASE,
+		COMMERTIZE_MCP_UPSTREAM_NEWS_RPM: "3",
+		COMMERTIZE_CACHE_TTL_MS: "1000",
+	});
+	let res = null;
+	try {
+		res = JSON.parse(r.stdout);
+	} catch {
+		res = null;
+	}
+	check("probe ran", res !== null, `${r.stdout} ${r.stderr}`.slice(0, 400));
+	const [stale, refused, listings] = res?.out ?? [];
+	check("past the budget, a cached key is served stale (no upstream call)", stale?.stale === true && stale?.hit === true, JSON.stringify(stale));
+	check("past the budget, an uncached key is refused RATE_LIMITED", refused?.threw === true && refused?.code === "RATE_LIMITED", JSON.stringify(refused));
+	check("the refusal is a retryable 429 with a retry time", refused?.status === 429 && refused?.retryable === true && /Retry after \d+s/.test(refused?.msg ?? ""), JSON.stringify(refused));
+	check("upstream saw exactly the 3 budgeted news reads", newsCalls.length - before === 3, String(newsCalls.length - before));
+	check("other routes are outside the news budget", listings?.listingsOk === true, JSON.stringify(listings));
+	check("default budget is 60 when the env is unset in a fresh process", (() => {
+		const d = spawnSync(process.execPath, ["--input-type=module", "-e", `const {config}=await import(${JSON.stringify(dist("config.js"))});process.stdout.write(String(config.upstreamNewsPerMinute));`], { env: { ...process.env, COMMERTIZE_MCP_UPSTREAM_NEWS_RPM: "" }, encoding: "utf8" });
+		return d.stdout === "60";
+	})());
 }
 
 srv.close();

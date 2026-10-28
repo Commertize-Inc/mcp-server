@@ -29,6 +29,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const LIVE = process.env.COMMERTIZE_MCP_LIVE_TESTS === "1";
 
 const SUITES = [
+	["package identity (offline)", "package-name.mjs", { live: false }],
 	["degradation (offline)", "api-down.mjs", { live: false }],
 	["live stdio e2e (network)", "stdio-e2e.mjs", { live: true }],
 	["screener unit (offline)", "screener-unit.mjs", { live: false }],

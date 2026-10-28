@@ -1,10 +1,24 @@
 /**
- * Simulation-venue tools: the paper sandbox, as four tools an agent can drive.
+ * Simulation-venue tools: the paper sandbox, as five tools an agent can drive.
  *
- *   sandbox_enroll       take the capability and open a notional ledger
- *   sandbox_universe     the invented instrument list
- *   sandbox_place_order  record one simulated allocation
- *   sandbox_account      this credential's own balance, positions and orders
+ *   sandbox_enroll               take the capability and open a notional ledger
+ *   sandbox_universe             the invented instrument list
+ *   sandbox_record_commitment    record one simulated primary commitment
+ *   sandbox_withdraw_commitment  withdraw one, before the simulated close only
+ *   sandbox_account              this credential's own balance and commitments
+ *
+ * ── COMMITMENTS, NOT ORDERS (legal ruling 2026-10-28, item 5) ─────────────
+ *
+ * The write used to be `sandbox_place_order` with a `side: buy|sell` input.
+ * A buy/sell tool is an order-entry front end in name and shape even when
+ * nothing is real, and the name travels into catalogues and transcripts. So
+ * the venue simulates a PRIMARY COMMITMENT only: there is no side, no sell in
+ * any form (a sell is secondary trading), and a reversal is a separate
+ * withdrawal that the venue declines once its simulated close has passed.
+ * The old name stays callable for one release and returns `TOOL_RENAMED`
+ * naming the new tool; it records nothing and is not in `platform_info`.
+ * `test/sandbox-e2e.mjs` bars the order vocabulary from every sandbox
+ * title, description and schema.
  *
  * ── NOT REGISTERED WHEN THE GATE IS CLOSED ────────────────────────────────
  *
@@ -47,15 +61,28 @@ import { getJsonAs, postJson } from "./http.js";
 export const SANDBOX_TOOL_NAMES = [
 	"sandbox_enroll",
 	"sandbox_universe",
-	"sandbox_place_order",
+	"sandbox_record_commitment",
+	"sandbox_withdraw_commitment",
 	"sandbox_account",
 ] as const;
 
 /** Tools that write. Named so `platform_info` can report them honestly. */
 export const SANDBOX_WRITE_TOOL_NAMES = [
 	"sandbox_enroll",
-	"sandbox_place_order",
+	"sandbox_record_commitment",
+	"sandbox_withdraw_commitment",
 ] as const;
+
+/**
+ * Retired for ONE release: registered (behind the same gate) so an old client
+ * gets an answer naming the replacement instead of "tool not found", but
+ * deliberately absent from both lists above, so `platform_info` never
+ * advertises it as a capability. Delete in the release after this one.
+ */
+export const RETIRED_SANDBOX_TOOL_NAME = "sandbox_place_order";
+
+/** A commitment id is a plain token; anything else never reaches a URL path. */
+const COMMITMENT_ID = /^[A-Za-z0-9_-]{1,80}$/;
 
 const BASE = "/api/agents/sandbox";
 
@@ -65,7 +92,7 @@ const BASE = "/api/agents/sandbox";
  * A tool DESCRIPTION is a surface: it is what a model reads before deciding
  * what a tool is for, and it travels into transcripts, tool catalogues and
  * registry listings that a response payload never reaches. So the badge is
- * prefixed to all four descriptions as a literal, AND it arrives on every
+ * prefixed to every description as a literal, AND it arrives on every
  * response — relayed from the backend body rather than restated, so a backend
  * that stopped sending it produces a visible null instead of a locally invented
  * reassurance.
@@ -146,7 +173,7 @@ export const registerSandboxTools = (server: McpServer): void => {
 		"sandbox_enroll",
 		{
 			title: "Open a simulation ledger for this credential",
-			description: `${BADGE} ${FICTION_NOTICE} Take the simulation capability and open a notional, non-monetary ledger for THIS credential. No money is involved, no security is offered, and nothing here is an investment, a subscription, or an order. Idempotent: calling it again returns the existing ledger and does not add a second opening balance. Requires an agent credential (COMMERTIZE_AGENT_KEY).`,
+			description: `${BADGE} ${FICTION_NOTICE} Take the simulation capability and open a notional, non-monetary ledger for THIS credential. No money is involved, no security is offered, and nothing here is an investment or a subscription. Idempotent: calling it again returns the existing ledger and does not add a second opening balance. Requires an agent credential (COMMERTIZE_AGENT_KEY).`,
 			inputSchema: {},
 			outputSchema: {
 				...envelopeShape,
@@ -158,7 +185,7 @@ export const registerSandboxTools = (server: McpServer): void => {
 					.object({
 						opened_at: z.string(),
 						notional_cents: z.number(),
-						orders: z.number(),
+						commitments: z.number(),
 					})
 					.nullable(),
 			},
@@ -195,7 +222,7 @@ export const registerSandboxTools = (server: McpServer): void => {
 					account: {
 						opened_at: String(account.openedAt ?? ""),
 						notional_cents: Number(account.notionalCents ?? 0),
-						orders: Number(account.orders ?? 0),
+						commitments: Number(account.commitments ?? 0),
 					},
 				});
 			} catch (err) {
@@ -211,7 +238,7 @@ export const registerSandboxTools = (server: McpServer): void => {
 		"sandbox_universe",
 		{
 			title: "The simulation venue's invented instrument list",
-			description: `${BADGE} ${FICTION_NOTICE} List the instruments the simulation venue trades. Every one is INVENTED: an invented asset with an invented sponsor, existing only in Commertize's backend source. None of them is a real property, a real operator, or anything Commertize lists, and none of them is an offering. The payload carries no performance figures of any kind and no forward-looking estimate, because a simulation of an agent's plumbing does not need one. Requires an agent credential.`,
+			description: `${BADGE} ${FICTION_NOTICE} List the instruments the simulation venue carries. Every one is INVENTED: an invented asset with an invented sponsor, existing only in Commertize's backend source. None of them is a real property, a real operator, or anything Commertize lists, and none of them is an offering. The payload carries no performance figures of any kind and no forward-looking estimate, because a simulation of an agent's plumbing does not need one. Requires an agent credential.`,
 			inputSchema: {},
 			outputSchema: {
 				...envelopeShape,
@@ -226,7 +253,7 @@ export const registerSandboxTools = (server: McpServer): void => {
 							state: z.string(),
 							property_type: z.string(),
 							sponsor: z.string(),
-							unit_price_cents: z.number(),
+							unit_amount_cents: z.number(),
 							units_outstanding: z.number(),
 						}),
 					)
@@ -257,7 +284,7 @@ export const registerSandboxTools = (server: McpServer): void => {
 							state: String(a.state ?? ""),
 							property_type: String(a.propertyType ?? ""),
 							sponsor: String(a.sponsor ?? ""),
-							unit_price_cents: Number(a.unitPriceCents ?? 0),
+							unit_amount_cents: Number(a.unitAmountCents ?? 0),
 							units_outstanding: Number(a.unitsOutstanding ?? 0),
 						};
 					}),
@@ -268,21 +295,54 @@ export const registerSandboxTools = (server: McpServer): void => {
 		},
 	);
 
+	/** The commitment row, as both commitment tools return it. */
+	const commitmentShape = z
+		.object({
+			seq: z.number(),
+			id: z.string(),
+			asset_id: z.string(),
+			status: z.string(),
+			quantity: z.number(),
+			unit_amount_cents: z.number(),
+			notional_cents: z.number(),
+			decline_reason: z.string().nullable(),
+			simulation: z.boolean(),
+			created_at: z.string(),
+		})
+		.nullable();
+
+	/** Map the venue's row. Every field is read off the row, none asserted. */
+	const commitmentOf = (raw: unknown) => {
+		const o = (raw ?? {}) as Record<string, unknown>;
+		return {
+			seq: Number(o.seq ?? 0),
+			id: String(o.id ?? ""),
+			asset_id: String(o.assetId ?? ""),
+			status: String(o.status ?? ""),
+			quantity: Number(o.quantity ?? 0),
+			unit_amount_cents: Number(o.unitAmountCents ?? 0),
+			notional_cents: Number(o.notionalCents ?? 0),
+			decline_reason: (o.declineReason as string) ?? null,
+			// Relayed from the row, never asserted here.
+			simulation: o.simulation === true,
+			created_at: String(o.createdAt ?? ""),
+		};
+	};
+
 	/* ---------------------------------------------------------- */
-	/* sandbox_place_order                                         */
+	/* sandbox_record_commitment                                   */
 	/* ---------------------------------------------------------- */
 	server.registerTool(
-		"sandbox_place_order",
+		"sandbox_record_commitment",
 		{
-			title: "Record one simulated allocation",
-			description: `${BADGE} Record a simulated allocation against an invented instrument, from a notional balance. THIS MOVES NO MONEY AND CREATES NO OBLIGATION: it is not a subscription, not an order, and not an investment in anything. A rejected order (insufficient notional balance, unknown instrument) still returns a row with a reason code. Results are private to this credential; publishing, ranking, or advertising them is prohibited. Requires an agent credential.`,
+			title: "Record one simulated commitment",
+			description: `${BADGE} Record a simulated primary commitment against an invented instrument, from a notional balance. THIS MOVES NO MONEY AND CREATES NO OBLIGATION: it is not a subscription, and not an investment in anything. A declined commitment (insufficient notional balance, unknown instrument) still returns a row with a reason code. To reverse one, use sandbox_withdraw_commitment before the simulated close. Results are private to this credential; publishing, ranking, or advertising them is prohibited. Requires an agent credential.`,
 			inputSchema: {
 				asset_id: z
 					.string()
 					.describe(
 						"An id from sandbox_universe. Never a Commertize listing id — the venue does not know what those are.",
 					),
-				side: z.enum(["buy", "sell"]),
 				quantity: z
 					.number()
 					.int()
@@ -293,27 +353,13 @@ export const registerSandboxTools = (server: McpServer): void => {
 					.min(8)
 					.max(80)
 					.describe(
-						"YOUR replay key, 8-80 characters. Required, not optional: reusing it returns the original allocation instead of recording a second one, which is the whole point. Generate one per intended order and reuse it on every retry.",
+						"YOUR replay key, 8-80 characters. Required, not optional: reusing it returns the original commitment instead of recording a second one, which is the whole point. Generate one per intended commitment and reuse it on every retry.",
 					),
 			},
 			outputSchema: {
 				...envelopeShape,
 				...simulationShape,
-				order: z
-					.object({
-						seq: z.number(),
-						id: z.string(),
-						asset_id: z.string(),
-						side: z.string(),
-						status: z.string(),
-						quantity: z.number(),
-						unit_price_cents: z.number(),
-						notional_cents: z.number(),
-						rejection_reason: z.string().nullable(),
-						simulation: z.boolean(),
-						created_at: z.string(),
-					})
-					.nullable(),
+				commitment: commitmentShape,
 			},
 			annotations: {
 				readOnlyHint: false,
@@ -324,43 +370,114 @@ export const registerSandboxTools = (server: McpServer): void => {
 			},
 		},
 		async (args) => {
-			const path = `${BASE}/orders`;
+			const path = `${BASE}/commitments`;
 			const sourceUrl = `${config.apiBaseUrl}${path}`;
-			const empty = { order: null };
+			const empty = { commitment: null };
 			if (!config.agentKey) return NO_CREDENTIAL(empty, path);
 			try {
+				// Built field by field: nothing the caller passes beyond these
+				// three (an old client's `side`, say) can reach the venue.
 				const res = await postJson<Record<string, unknown>>(
 					path,
 					{
 						assetId: args.asset_id,
-						side: args.side,
 						quantity: args.quantity,
 						idempotencyKey: args.idempotency_key,
 					},
 					config.agentKey,
 				);
 				const b = res.body ?? {};
-				const o = (b.order ?? {}) as Record<string, unknown>;
 				return relay(b, res.sourceUrl, {
-					order: {
-						seq: Number(o.seq ?? 0),
-						id: String(o.id ?? ""),
-						asset_id: String(o.assetId ?? ""),
-						side: String(o.side ?? ""),
-						status: String(o.status ?? ""),
-						quantity: Number(o.quantity ?? 0),
-						unit_price_cents: Number(o.unitPriceCents ?? 0),
-						notional_cents: Number(o.notionalCents ?? 0),
-						rejection_reason: (o.rejectionReason as string) ?? null,
-						// Relayed from the row, never asserted here.
-						simulation: o.simulation === true,
-						created_at: String(o.createdAt ?? ""),
-					},
+					commitment: commitmentOf(b.commitment),
 				});
 			} catch (err) {
 				return fail(err, sourceUrl, empty);
 			}
 		},
+	);
+
+	/* ---------------------------------------------------------- */
+	/* sandbox_withdraw_commitment                                 */
+	/* ---------------------------------------------------------- */
+	server.registerTool(
+		"sandbox_withdraw_commitment",
+		{
+			title: "Withdraw one simulated commitment",
+			description: `${BADGE} Withdraw a simulated commitment this credential recorded, before the simulated close only; after it, the venue declines and says so. THIS MOVES NO MONEY AND CREATES NO OBLIGATION. Withdrawing twice returns the same withdrawn row. Requires an agent credential.`,
+			inputSchema: {
+				commitment_id: z
+					.string()
+					.describe(
+						"The id sandbox_record_commitment returned. Letters, digits, '-' and '_' only.",
+					),
+			},
+			outputSchema: {
+				...envelopeShape,
+				...simulationShape,
+				commitment: commitmentShape,
+			},
+			annotations: {
+				readOnlyHint: false,
+				destructiveHint: false,
+				idempotentHint: true,
+				openWorldHint: true,
+			},
+		},
+		async (args) => {
+			const empty = { commitment: null };
+			// Checked before it is spliced into a path: an id like "../account"
+			// must never address a different route.
+			if (!COMMITMENT_ID.test(args.commitment_id)) {
+				const path = `${BASE}/commitments`;
+				return refuse(
+					"INVALID_ARGUMENT",
+					"commitment_id must be the id sandbox_record_commitment returned (letters, digits, '-' and '_'). Nothing was withdrawn.",
+					`${config.apiBaseUrl}${path}`,
+					empty,
+				);
+			}
+			const path = `${BASE}/commitments/${args.commitment_id}/withdraw`;
+			const sourceUrl = `${config.apiBaseUrl}${path}`;
+			if (!config.agentKey) return NO_CREDENTIAL(empty, path);
+			try {
+				const res = await postJson<Record<string, unknown>>(
+					path,
+					{},
+					config.agentKey,
+				);
+				const b = res.body ?? {};
+				return relay(b, res.sourceUrl, {
+					commitment: commitmentOf(b.commitment),
+				});
+			} catch (err) {
+				return fail(err, sourceUrl, empty);
+			}
+		},
+	);
+
+	/* ---------------------------------------------------------- */
+	/* retired name: one release, records nothing                  */
+	/* ---------------------------------------------------------- */
+	server.registerTool(
+		RETIRED_SANDBOX_TOOL_NAME,
+		{
+			title: "Retired name",
+			description: `${BADGE} RETIRED. This name has been replaced by sandbox_record_commitment; calling it records nothing and returns an error naming the replacement. It will be removed in the next release.`,
+			inputSchema: {},
+			annotations: {
+				readOnlyHint: true,
+				destructiveHint: false,
+				idempotentHint: true,
+				openWorldHint: false,
+			},
+		},
+		async () =>
+			refuse(
+				"TOOL_RENAMED",
+				`${RETIRED_SANDBOX_TOOL_NAME} has been renamed to sandbox_record_commitment, which takes asset_id, quantity and idempotency_key. Nothing was recorded.`,
+				`${config.apiBaseUrl}${BASE}/commitments`,
+				{},
+			),
 	);
 
 	/* ---------------------------------------------------------- */
@@ -380,7 +497,7 @@ export const registerSandboxTools = (server: McpServer): void => {
 						opened_at: z.string(),
 						reset_at: z.string().nullable(),
 						notional_cents: z.number(),
-						orders: z.number(),
+						commitments: z.number(),
 					})
 					.nullable(),
 				positions: z
@@ -407,7 +524,7 @@ export const registerSandboxTools = (server: McpServer): void => {
 						opened_at: String(a.openedAt ?? ""),
 						reset_at: (a.resetAt as string) ?? null,
 						notional_cents: Number(a.notionalCents ?? 0),
-						orders: Number(a.orders ?? 0),
+						commitments: Number(a.commitments ?? 0),
 					},
 					positions: positions.map((raw) => {
 						const p = raw as Record<string, unknown>;

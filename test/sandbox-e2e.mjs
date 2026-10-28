@@ -390,12 +390,12 @@ section("no credential: every tool refuses and says what to do");
 		const { payload: out } = await call(client, name, args);
 		check(
 			`${name} refuses`,
-			out.error?.code === "NO_CREDENTIAL",
-			JSON.stringify(out.error),
+			out?.error?.code === "NO_CREDENTIAL",
+			JSON.stringify(out?.error),
 		);
 		check(
 			`${name} says how to fix it`,
-			/COMMERTIZE_AGENT_KEY/.test(out.error?.message ?? ""),
+			/COMMERTIZE_AGENT_KEY/.test(out?.error?.message ?? ""),
 		);
 	}
 	check(

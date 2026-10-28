@@ -57,7 +57,12 @@ export const originAllowed = (raw: string | string[] | undefined): boolean =>
 	raw === undefined || (typeof raw === "string" && PUBLIC_ALLOWED_ORIGINS.has(raw));
 
 export interface PublicHandlerOptions {
-	/** False = 404 for every request. Read per request (the kill switch). */
+	/**
+	 * False = 404 for every request. Called per request, but the production
+	 * closure (httpEntry.ts) returns config.publicDisabled, which is computed
+	 * once at module load from the environment. Changing the environment does
+	 * NOT close a running deployment; see README "Turning /mcp/public on and off".
+	 */
 	enabled: () => boolean;
 	ipLimiter: FixedWindowLimiter;
 	/** Builds a public-surface server; `onToolResult` sees each tool result. */

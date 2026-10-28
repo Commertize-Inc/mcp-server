@@ -62,6 +62,14 @@ npx @modelcontextprotocol/inspector node dist/index.js
 | `COMMERTIZE_CACHE_TTL_MS` | `60000` | Fresh-response window. |
 | `COMMERTIZE_MCP_CONTENT_DIR` | unset (`content/` next to `dist/`) | Absolute path of `content/` when a packager moves the built files. |
 
+### Turning /mcp/public on and off
+
+The gate is read once, when the server starts. A running deployment keeps the value it started with, so changing an environment variable does nothing until the next deployment.
+
+- **On:** set `COMMERTIZE_MCP_ENABLE_PUBLIC=1` (exactly `1`), leave `COMMERTIZE_MCP_DISABLE_PUBLIC` unset, and redeploy. Turn it on only for a build whose `GET /health` reports `toolCalls`, because older builds give no public signal. Afterwards, check `GET /health`.
+- **Off, fast:** roll back to the previous deployment, which was closed. Then set `COMMERTIZE_MCP_DISABLE_PUBLIC=1` and redeploy, so the next deployment cannot reopen it. Any non-empty value except `0` closes the endpoint, whatever `ENABLE` says.
+- **Rate limit:** `COMMERTIZE_MCP_PUBLIC_RPM_PER_IP` (default `30`) caps requests per client IP per minute. The count is kept in memory **per running instance**, so N instances admit up to N times the value.
+
 ## Tests
 
 ```bash

@@ -272,4 +272,16 @@ const out = { r400, r201, r200, origins, logs };`
 }
 
 upstream.close();
+section("H6. caller text in error log lines is flattened and capped");
+{
+	const { logSafe, LOG_DETAIL_MAX } = await import(path.join(DIST, "httpPublic.js"));
+	const injected = logSafe('slug-x\n{"event":"public_request","fake":true}');
+	check("newline is flattened (no injected second log line)", !/[\n\r]/.test(injected), injected);
+	check("format chars stripped", !/‮|​/.test(logSafe("a‮b​c")));
+	const long = logSafe("x".repeat(5000));
+	check("capped at LOG_DETAIL_MAX + ellipsis", long.length === LOG_DETAIL_MAX + 1, String(long.length));
+	check("short plain text unchanged", logSafe("upstream 503") === "upstream 503");
+	check("undefined becomes empty", logSafe(undefined) === "");
+}
+
 process.exit(summary("public hardening") === 0 ? 0 : 1);

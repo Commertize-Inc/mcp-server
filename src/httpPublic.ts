@@ -56,6 +56,17 @@ export const PUBLIC_ALLOWED_ORIGINS: ReadonlySet<string> = new Set(["https://age
 export const originAllowed = (raw: string | string[] | undefined): boolean =>
 	raw === undefined || (typeof raw === "string" && PUBLIC_ALLOWED_ORIGINS.has(raw));
 
+/**
+ * Error text in public_tool_error / public_error lines can carry caller input
+ * (a slug, a parse error quoting the body). Strip control and format
+ * characters so a caller cannot inject fake log lines, and cap the length.
+ */
+export const LOG_DETAIL_MAX = 200;
+export const logSafe = (s: unknown): string => {
+	const flat = String(s ?? "").replace(/[\p{Cc}\p{Cf}  ]/gu, " ");
+	return flat.length > LOG_DETAIL_MAX ? `${flat.slice(0, LOG_DETAIL_MAX)}…` : flat;
+};
+
 export interface PublicHandlerOptions {
 	/**
 	 * False = 404 for every request. Called per request, but the production
@@ -235,7 +246,7 @@ export const createPublicHttpHandler = (o: PublicHandlerOptions): NodeHandler =>
 						event: "public_tool_error",
 						tool: isPublicTool(t) ? t : "(sdk)",
 						code: d.code,
-						detail: d.detail,
+						detail: logSafe(d.detail),
 					});
 				}
 			});
@@ -255,7 +266,7 @@ export const createPublicHttpHandler = (o: PublicHandlerOptions): NodeHandler =>
 			o.log({
 				ts: new Date(now()).toISOString(),
 				event: "public_error",
-				message: err instanceof Error ? err.message : String(err),
+				message: logSafe(err instanceof Error ? err.message : String(err)),
 			});
 			if (!res.headersSent) send(500, refusalBody("internal_error", {}, o.enabled()));
 		} finally {

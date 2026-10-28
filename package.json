@@ -5,7 +5,7 @@
 		"access": "public",
 		"provenance": true
 	},
-	"files": ["dist", "README.md", "LICENSE"],
+	"files": ["dist", "content", "README.md", "LICENSE"],
 	"description": "MCP server for Commertize, the digital capital markets platform for real-world assets.",
 	"repository": {
 		"type": "git",

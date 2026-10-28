@@ -29,7 +29,7 @@ check("publishable (not private), public access, provenance", () => {
 	assert.equal(pkg.publishConfig?.access, "public");
 	assert.equal(pkg.publishConfig?.provenance, true);
 });
-check("files allowlist: dist, README.md, LICENSE only", () => assert.deepEqual(pkg.files, ["dist", "README.md", "LICENSE"]));
+check("files allowlist: dist, content (read at runtime by tools.ts:55), README.md, LICENSE", () => assert.deepEqual(pkg.files, ["dist", "content", "README.md", "LICENSE"]));
 check("bin names unchanged", () => assert.deepEqual(Object.keys(pkg.bin).sort(), ["commertize-mcp-http", "commertize-mcp-server"]));
 check("lockfile name in step", () => {
 	assert.equal(lock.name, pkg.name);

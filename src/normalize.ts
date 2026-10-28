@@ -199,7 +199,6 @@ export const normalizeOffering = (raw: RawListing) => {
 			total_token_supply: totalSupply,
 			tokens_for_investors: tokensForInvestors,
 			tokens_for_sponsor: num(tok.tokensForSponsor),
-			tokens_for_treasury: num(tok.tokensForTreasury),
 			min_investment_tokens: minTokens,
 			max_investment_tokens: num(tok.maxInvestmentTokens),
 			lockup_months: num(tok.lockupMonths),

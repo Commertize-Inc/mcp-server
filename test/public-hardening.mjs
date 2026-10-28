@@ -305,6 +305,11 @@ section("H7. RATE_LIMITED on the public surface: fixed text and a fixed retry_af
 	const other = ps.withPublicDisclaimer({ ...raw, structuredContent: { ...raw.structuredContent, error: { code: "UPSTREAM_ERROR", message: "m", retryable: true } } }).structuredContent;
 	check("no retry_after_seconds on other codes", !("retry_after_seconds" in other.error));
 	check("source_url blanked", out.source_url === "");
+	const { envelopeShape, offeringSchema } = await import(path.join(DIST, "schemas.js"));
+	check("output schema accepts the public RATE_LIMITED error", envelopeShape.error.safeParse(out.error).success === true);
+	check("output schema declares retry_after_seconds", "retry_after_seconds" in envelopeShape.error.unwrap().shape);
+	check("output schema refuses a non-integer retry_after_seconds", envelopeShape.error.safeParse({ ...out.error, retry_after_seconds: 1.5 }).success === false);
+	check("offering tokenomics no longer carries the platform allocation field", JSON.stringify(Object.keys(offeringSchema.shape.tokenomics.shape).sort()) === JSON.stringify(["lockup_months", "max_investment_tokens", "min_investment_tokens", "tokens_for_investors", "tokens_for_sponsor", "token_price", "total_token_supply"].sort()));
 	const apx = "apx-" + createHash("sha1").update(ps.PUBLIC_ERROR_MESSAGES.RATE_LIMITED, "utf8").digest("hex").slice(0, 10);
 	check("RATE_LIMITED text is the certified apx-4f9b9bfc8d", apx === "apx-4f9b9bfc8d", apx);
 	const httpSrc = await readFile(path.join(DIST, "..", "src", "http.ts"), "utf8");

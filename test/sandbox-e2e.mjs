@@ -523,13 +523,19 @@ section("the happy path relays the venue's own designation");
 	);
 	check("the late withdrawal returns no commitment", late?.commitment === null);
 
+	hits = [];
 	const { payload: weird } = await call(client, "sandbox_withdraw_commitment", {
 		commitment_id: "../account",
 	});
 	check(
-		"a commitment id that is not a plain id is refused before any call",
-		weird?.error !== null && weird?.error !== undefined,
+		"a commitment id that is not a plain id is refused as invalid",
+		weird?.error?.code === "INVALID_ARGUMENT",
 		JSON.stringify(weird?.error),
+	);
+	check(
+		"the refused id reached no upstream",
+		hits.length === 0,
+		hits.join(","),
 	);
 
 	const { payload: account } = await call(client, "sandbox_account");

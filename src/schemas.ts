@@ -30,6 +30,10 @@ export const envelopeShape = {
 	disclaimer: z
 		.string()
 		.describe("Standing disclaimer. Carry it into anything you report to a user."),
+	sec_disclaimer: z
+		.string()
+		.optional()
+		.describe("Disclaimer text returned by the no-login endpoint. Show it together with the standing disclaimer."),
 	error: z
 		.object({
 			code: z.string(),
@@ -37,6 +41,12 @@ export const envelopeShape = {
 			retryable: z
 				.boolean()
 				.describe("True if retrying the same call later may succeed."),
+			retry_after_seconds: z
+				.number()
+				.int()
+				.positive()
+				.optional()
+				.describe("Seconds to wait before retrying. Present only on RATE_LIMITED."),
 		})
 		.nullable()
 		.describe("Null on success. Populated when the call failed."),
@@ -85,7 +95,6 @@ export const offeringSchema = z.object({
 			total_token_supply: nullableNumber(),
 			tokens_for_investors: nullableNumber(),
 			tokens_for_sponsor: nullableNumber(),
-			tokens_for_treasury: nullableNumber(),
 			min_investment_tokens: nullableNumber(),
 			max_investment_tokens: nullableNumber().describe(
 				"Null means no disclosed per-investor cap."

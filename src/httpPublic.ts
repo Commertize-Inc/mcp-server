@@ -61,7 +61,7 @@ export interface PublicHandlerOptions {
 	 * False = 404 for every request. Called per request, but the production
 	 * closure (httpEntry.ts) returns config.publicDisabled, which is computed
 	 * once at module load from the environment. Changing the environment does
-	 * NOT close a running deployment; see README "Turning /mcp/public on and off".
+	 * NOT close a running deployment; see README "Turning the no-login endpoint on and off".
 	 */
 	enabled: () => boolean;
 	ipLimiter: FixedWindowLimiter;

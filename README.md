@@ -62,7 +62,7 @@ npx @modelcontextprotocol/inspector node dist/index.js
 | `COMMERTIZE_CACHE_TTL_MS` | `60000` | Fresh-response window. |
 | `COMMERTIZE_MCP_CONTENT_DIR` | unset (`content/` next to `dist/`) | Absolute path of `content/` when a packager moves the built files. |
 
-### Turning /mcp/public on and off
+### Turning the no-login endpoint on and off
 
 The gate is read once, when the server starts. A running deployment keeps the value it started with, so changing an environment variable does nothing until the next deployment.
 

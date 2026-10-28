@@ -63,7 +63,7 @@ export const originAllowed = (raw: string | string[] | undefined): boolean =>
  */
 export const LOG_DETAIL_MAX = 200;
 export const logSafe = (s: unknown): string => {
-	const flat = String(s ?? "").replace(/[\p{Cc}\p{Cf}  ]/gu, " ");
+	const flat = String(s ?? "").replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, " ");
 	return flat.length > LOG_DETAIL_MAX ? `${flat.slice(0, LOG_DETAIL_MAX)}…` : flat;
 };
 

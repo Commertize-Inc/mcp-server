@@ -286,4 +286,29 @@ section("H6. caller text in error log lines is flattened and capped");
 	check("undefined becomes empty", logSafe(undefined) === "");
 }
 
+section("H7. RATE_LIMITED on the public surface: fixed text and a fixed retry_after_seconds");
+{
+	const ps = await import(path.join(DIST, "publicSurface.js"));
+	const raw = {
+		content: [],
+		structuredContent: {
+			disclaimer: "x",
+			source_url: "http://internal/api/news?since=a",
+			error: { code: "RATE_LIMITED", message: "Too many reads right now. Retry after 37s.", retryable: true },
+		},
+		isError: true,
+	};
+	const out = ps.withPublicDisclaimer(raw).structuredContent;
+	check("message is the fixed RATE_LIMITED text, not Internal error", out.error.message === "Too many reads right now. Retry later.", out.error.message);
+	check("code and retryable kept", out.error.code === "RATE_LIMITED" && out.error.retryable === true);
+	check("retry_after_seconds is the fixed constant", out.error.retry_after_seconds === ps.PUBLIC_RATE_LIMITED_RETRY_AFTER_SECONDS && out.error.retry_after_seconds === 60, String(out.error.retry_after_seconds));
+	const other = ps.withPublicDisclaimer({ ...raw, structuredContent: { ...raw.structuredContent, error: { code: "UPSTREAM_ERROR", message: "m", retryable: true } } }).structuredContent;
+	check("no retry_after_seconds on other codes", !("retry_after_seconds" in other.error));
+	check("source_url blanked", out.source_url === "");
+	const apx = "apx-" + createHash("sha1").update(ps.PUBLIC_ERROR_MESSAGES.RATE_LIMITED, "utf8").digest("hex").slice(0, 10);
+	check("RATE_LIMITED text is the certified apx-4f9b9bfc8d", apx === "apx-4f9b9bfc8d", apx);
+	const httpSrc = await readFile(path.join(DIST, "..", "src", "http.ts"), "utf8");
+	check("RATE_LIMITED is raised in exactly one place (budget exhausted, no cached copy)", (httpSrc.match(/code: "RATE_LIMITED"/g) ?? []).length === 1);
+}
+
 process.exit(summary("public hardening") === 0 ? 0 : 1);

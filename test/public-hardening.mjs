@@ -280,6 +280,8 @@ section("H6. caller text in error log lines is flattened and capped");
 	check("format chars stripped", !/[\u202e\u200b]/.test(logSafe("a\u202eb\u200bc")));
 	const long = logSafe("x".repeat(5000));
 	check("capped at LOG_DETAIL_MAX + ellipsis", long.length === LOG_DETAIL_MAX + 1, String(long.length));
+	const astral = logSafe("\u{1F600}".repeat(300));
+	check("cap counts code points (no split surrogate pair)", Array.from(astral).length === LOG_DETAIL_MAX + 1 && !/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(astral));
 	check("short plain text unchanged", logSafe("upstream 503") === "upstream 503");
 	check("undefined becomes empty", logSafe(undefined) === "");
 }

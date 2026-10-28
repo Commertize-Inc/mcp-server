@@ -38,6 +38,7 @@ const SUITES = [
 	["disclosure e2e (stub upstream)", "disclosure-e2e.mjs", { live: false }],
 	["deployment gates (offline)", "gates-e2e.mjs", { live: false }],
 	["streamable http e2e (stub upstream)", "http-e2e.mjs", { live: false }],
+	["entry via npm bin symlink (offline)", "entry-symlink.mjs", { live: false }],
 	["get_news class/since (stub upstream)", "news-filters.mjs", { live: false }],
 	["client ip /64 bucketing (offline)", "client-ip.mjs", { live: false }],
 	["platform reads e2e (stub upstream)", "platform-reads-e2e.mjs", { live: false }],

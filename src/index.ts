@@ -10,6 +10,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
 import { config } from "./config.js";
+import { isMainModule } from "./isMain.js";
 import { registerInquiryTool } from "./inquiryTool.js";
 import { registerPlatformTools } from "./platformTools.js";
 import { registerSandboxTools } from "./sandboxTools.js";
@@ -108,7 +109,7 @@ const main = async (): Promise<void> => {
 
 // Only run when executed directly; importing this module (tests) must not
 // grab stdio.
-if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule(import.meta.url)) {
 	main().catch((err) => {
 		console.error("Fatal:", err);
 		process.exit(1);

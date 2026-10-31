@@ -84,6 +84,7 @@ const fetchFresh = async (url: string): Promise<CacheEntry> => {
 
 	try {
 		const res = await fetch(url, {
+			redirect: "manual",
 			signal: controller.signal,
 			headers: { accept: "application/json", "user-agent": config.userAgent },
 		});
@@ -224,6 +225,7 @@ export const getJsonAs = async <T>(
 
 	try {
 		const res = await fetch(url, {
+			redirect: "manual",
 			signal: controller.signal,
 			headers: {
 				accept: "application/json",
@@ -326,6 +328,7 @@ export const getRaw = async (
 
 	try {
 		const res = await fetch(url, {
+			redirect: "manual",
 			signal: controller.signal,
 			headers: {
 				accept: "application/json, text/plain",
@@ -395,6 +398,7 @@ export const postPublicJson = async <T>(
 
 	try {
 		const res = await fetch(url, {
+			redirect: "manual",
 			method: "POST",
 			signal: controller.signal,
 			headers: {
@@ -476,6 +480,7 @@ export const postJson = async <T>(
 
 	try {
 		const res = await fetch(url, {
+			redirect: "manual",
 			method: "POST",
 			signal: controller.signal,
 			headers: {

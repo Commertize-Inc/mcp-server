@@ -52,13 +52,15 @@ const DATA_SHA = createHash("sha256").update(DATA_BYTES).digest("hex");
 let stubAmount = "10000";
 let stubNetwork = SEPOLIA;
 let paidMode = "deliver";
+let stubVersion = 2;
+let leakHits = 0;
 let seenSignature = null;
 let seenXPayment = null;
 let seenToken = null;
 let hits = [];
 
 const requiredFor = (route) => ({
-	x402Version: 2,
+	x402Version: stubVersion,
 	error: "payment_required",
 	resource: {
 		url: `http://stub/api/data/v1${route}`,
@@ -97,6 +99,11 @@ const server = createServer((req, res) => {
 		});
 		return;
 	}
+	if (p === "/leak") {
+		leakHits += 1;
+		json(200, { leaked: req.headers["payment-signature"] ?? null });
+		return;
+	}
 	if (p === "/api/data/v1/terms/ctz-data-licence-v1") {
 		res.writeHead(200, {
 			"content-type": "text/markdown; charset=UTF-8",
@@ -113,6 +120,11 @@ const server = createServer((req, res) => {
 		seenToken = req.headers["x-ctz-receipt-token"] ?? null;
 		if (!seenSignature) {
 			json(402, BODY_402, { "PAYMENT-REQUIRED": b64(requiredFor(route)) });
+			return;
+		}
+		if (paidMode === "redirect") {
+			res.writeHead(302, { location: "/leak" });
+			res.end();
 			return;
 		}
 		if (paidMode === "sanctioned") {
@@ -301,6 +313,56 @@ section("testnet by default: other networks are neither quoted nor paid");
 	});
 	check("a mainnet payment is refused", f.refusal?.code === "network_mismatch" && f.delivered === false);
 	check("a mainnet payment is never sent upstream", hits.length === before);
+	await client.close();
+}
+
+/* ------------------------------------------------------------------ */
+section("M-1: an undecodable or x402 v1 payment or quote fails closed");
+/* ------------------------------------------------------------------ */
+{
+	const client = await connect(ON);
+	stubVersion = 1;
+	const { payload: q1 } = await call(client, "x402_quote", { dataset_id: SKUS[0] });
+	check("a v1 PAYMENT-REQUIRED is not payable", q1.unavailable_reason === "x402_version_unsupported" && q1.payment_required === null);
+	stubVersion = 2;
+	const { payload: q2 } = await call(client, "x402_quote", { dataset_id: SKUS[0] });
+	check("control: the same v2 quote is payable", q2.unavailable_reason === null && q2.payment_required !== null);
+	const before = hits.length;
+	const { payload: u } = await call(client, "x402_fetch", { dataset_id: SKUS[0], payment_signature: "%%not-base64-json%%" });
+	check("an undecodable payment is refused", u.refusal?.code === "payment_signature_undecodable" && u.delivered === false);
+	const v1 = b64({ x402Version: 1, scheme: "exact", network: SEPOLIA, payload: { signature: "0x" + "ab".repeat(65) } });
+	const { payload: w } = await call(client, "x402_fetch", { dataset_id: SKUS[0], payment_signature: v1 });
+	check("a v1-shaped payment is refused", w.refusal?.code === "x402_version_unsupported" && w.delivered === false);
+	const v2noNet = b64({ x402Version: 2, accepted: { scheme: "exact" }, payload: {} });
+	const { payload: n } = await call(client, "x402_fetch", { dataset_id: SKUS[0], payment_signature: v2noNet });
+	check("a v2 payment with no network is refused", n.refusal?.code === "network_mismatch" && n.delivered === false);
+	check("none of those payments was sent upstream", hits.length === before);
+	await client.close();
+}
+
+/* ------------------------------------------------------------------ */
+section("M-2: outbound fetches never follow a redirect");
+/* ------------------------------------------------------------------ */
+{
+	const calls = [];
+	for (const f of readdirSync(SRC).filter((x) => x.endsWith(".ts"))) {
+		const t = readFileSync(path.join(SRC, f), "utf8");
+		let i = t.indexOf("await fetch(");
+		while (i !== -1) {
+			calls.push([f, t.slice(i, t.indexOf("});", i))]);
+			i = t.indexOf("await fetch(", i + 1);
+		}
+	}
+	check("the scan found the outbound fetch calls", calls.length >= 5, String(calls.length));
+	const open = calls.filter(([, c]) => !/redirect:\s*"manual"/.test(c)).map(([f]) => f);
+	check('every fetch sets redirect: "manual"', open.length === 0, open.join(","));
+	paidMode = "redirect";
+	leakHits = 0;
+	const client = await connect(ON);
+	const { payload: r } = await call(client, "x402_fetch", { dataset_id: SKUS[0], payment_signature: PAYMENT });
+	check("a redirected paid request is not delivered", r.delivered === false && r.status === 302);
+	check("the signed payment never reaches the redirect target", leakHits === 0);
+	paidMode = "deliver";
 	await client.close();
 }
 

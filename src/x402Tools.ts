@@ -106,11 +106,34 @@ const quotedNetworks = (pr: unknown): string[] => {
 	return accepts.map((a) => String((a as { network?: unknown })?.network ?? ""));
 };
 
-/** Network named in a caller's PAYMENT-SIGNATURE payload, if it decodes. */
-const paymentNetwork = (sig: string): string | null => {
-	const p = decodeB64Json(sig) as { accepted?: { network?: unknown } } | null;
-	const n = p?.accepted?.network;
-	return typeof n === "string" ? n : null;
+/** The only x402 wire version these tools quote or pay on. */
+const X402_VERSION = 2;
+
+type PaymentCheck =
+	| { ok: true }
+	| { ok: false; code: "payment_signature_undecodable" | "x402_version_unsupported" | "network_mismatch" };
+
+/**
+ * Fail-closed check of a caller's PAYMENT-SIGNATURE payload.
+ * Only a payload that decodes, is x402 v2, and names config.x402Network in
+ * accepted.network is sent. Anything else (undecodable, the v1 top-level
+ * `network` shape, no network) is refused before any request is made.
+ */
+const checkPayment = (sig: string): PaymentCheck => {
+	const p = decodeB64Json(sig) as
+		| { x402Version?: unknown; accepted?: { network?: unknown } }
+		| null;
+	if (p === null || typeof p !== "object") {
+		return { ok: false, code: "payment_signature_undecodable" };
+	}
+	if (p.x402Version !== X402_VERSION) {
+		return { ok: false, code: "x402_version_unsupported" };
+	}
+	const n = p.accepted?.network;
+	if (typeof n !== "string" || n !== config.x402Network) {
+		return { ok: false, code: "network_mismatch" };
+	}
+	return { ok: true };
 };
 
 const errorCode = (body: unknown, status: number): string => {
@@ -281,6 +304,14 @@ export const registerX402Tools = (server: McpServer): void => {
 						unavailable_reason: "payment_required_header_missing",
 					});
 				}
+				if ((pr as { x402Version?: unknown }).x402Version !== X402_VERSION) {
+					return envelope(res.sourceUrl, {
+						...empty,
+						status: res.status,
+						body: res.body,
+						unavailable_reason: "x402_version_unsupported",
+					});
+				}
 				const nets = quotedNetworks(pr);
 				if (nets.length === 0 || nets.some((n) => n !== config.x402Network)) {
 					return envelope(res.sourceUrl, {
@@ -369,12 +400,13 @@ export const registerX402Tools = (server: McpServer): void => {
 					refusal: { code: "unknown_dataset" },
 				});
 			}
-			// A payload that names another network is not sent anywhere.
-			const net = paymentNetwork(args.payment_signature);
-			if (net !== null && net !== config.x402Network) {
+			// A payload that does not decode, is not v2, or names another
+			// network is not sent anywhere (fail closed).
+			const verdict = checkPayment(args.payment_signature);
+			if (!verdict.ok) {
 				return envelope(config.apiBaseUrl, {
 					...empty,
-					refusal: { code: "network_mismatch" },
+					refusal: { code: verdict.code },
 				});
 			}
 			const headers: Record<string, string> = {

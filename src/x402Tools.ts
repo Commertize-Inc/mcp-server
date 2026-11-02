@@ -1,10 +1,10 @@
 /**
  * x402 paid-data tools for the Commertize metered data API (/api/data/v1).
  *
- *   x402_catalog   the API's own dataset list, relayed as served
+ *   x402_catalog   each dataset with the API's own unpaid quote, relayed as served
  *   x402_terms     the exact licence bytes a payment accepts
  *   x402_quote     ask for a dataset without paying; get the requirements
- *   x402_fetch     present a payment YOU signed and receive one delivery
+ *   x402_fetch     present a payment (or #1278 free read) YOU signed; one delivery
  *
  * Wire: x402 v2. The API answers an unpaid read with 402 and a base64 JSON
  * `PAYMENT-REQUIRED` header; a paid read carries the caller's signed payload
@@ -65,6 +65,11 @@ export const HEADER_REQUIRED = "payment-required";
 export const HEADER_SIGNATURE = "PAYMENT-SIGNATURE";
 export const HEADER_RESPONSE = "payment-response";
 export const HEADER_RECEIPT_TOKEN = "X-CTZ-Receipt-Token";
+/** #1278 free read tier: the caller's signed passport read, and its answer. */
+export const HEADER_FREE_READ = "X-CTZ-Free-Read";
+export const HEADER_FREE_RECEIPT = "x-ctz-free-read-receipt";
+export const HEADER_FREE_REMAINING = "x-ctz-free-reads-remaining";
+const BASE64URL = /^[A-Za-z0-9_-]+={0,2}$/;
 
 /**
  * SKU id -> path, same ids as the REST API. A map rather than a free-text
@@ -141,6 +146,48 @@ const errorCode = (body: unknown, status: number): string => {
 	return typeof e === "string" && e ? e : `HTTP ${status}`;
 };
 
+type QuoteOutcome = {
+	status: number;
+	payment_required: unknown;
+	body: unknown;
+	unavailable_reason: string | null;
+	sourceUrl: string;
+};
+
+/**
+ * One unpaid request to a dataset path. The decoded PAYMENT-REQUIRED is
+ * returned only when it is x402 v2 and every accept names the expected
+ * network; otherwise it is null with the reason. Throws what getRaw throws.
+ */
+const quoteOnce = async (path: string): Promise<QuoteOutcome> => {
+	const res = await getRaw(path);
+	const refuse = (reason: string): QuoteOutcome => ({
+		status: res.status,
+		payment_required: null,
+		body: res.body,
+		unavailable_reason: reason,
+		sourceUrl: res.sourceUrl,
+	});
+	if (res.status !== 402) return refuse(errorCode(res.body, res.status));
+	const pr = decodeB64Json(res.headers[HEADER_REQUIRED]);
+	if (pr === null) return refuse("payment_required_header_missing");
+	if ((pr as { x402Version?: unknown }).x402Version !== X402_VERSION) {
+		return refuse("x402_version_unsupported");
+	}
+	const nets = quotedNetworks(pr);
+	if (nets.length === 0 || nets.some((n) => n !== config.x402Network)) {
+		return refuse("network_mismatch");
+	}
+	return {
+		status: res.status,
+		payment_required: pr,
+		body: res.body,
+		unavailable_reason: null,
+		sourceUrl: res.sourceUrl,
+	};
+};
+
+
 export const registerX402Tools = (server: McpServer): void => {
 	if (config.x402Disabled) return;
 
@@ -150,41 +197,57 @@ export const registerX402Tools = (server: McpServer): void => {
 	server.registerTool(
 		"x402_catalog",
 		{
-			title: "Commertize metered datasets, as the API lists them",
+			title: "Commertize metered datasets, with the API's own quote for each",
 			description:
-				"List the datasets the Commertize data API sells per read over the x402 protocol. The list, including any amounts, is relayed exactly as the API serves it; this server holds no prices of its own. Also returns the dataset ids this server can quote and fetch. No credential needed.",
+				"List the datasets the Commertize data API sells per read over the x402 protocol, each with the decoded PAYMENT-REQUIRED the API answers an unpaid read with (one unpaid request per dataset; nothing is signed or spent). Every amount is relayed exactly as the API serves it; this server holds no prices of its own. No credential needed.",
 			inputSchema: {},
 			outputSchema: {
 				...envelopeShape,
 				dataset_ids: z.array(z.string()),
 				expected_network: z.string(),
-				catalog: z.unknown().nullable(),
+				catalog: z
+					.array(
+						z.object({
+							dataset_id: z.string(),
+							status: z.number().nullable(),
+							payment_required: z.unknown().nullable(),
+							unavailable_reason: z.string().nullable(),
+						}),
+					)
+					.nullable(),
 				unavailable_reason: z.string().nullable(),
 			},
 			annotations: { readOnlyHint: true, openWorldHint: true },
 		},
 		async () => {
-			const path = `${DATA_API}/`;
 			const base = {
 				dataset_ids: [...DATASET_IDS],
 				expected_network: config.x402Network,
 			};
+			// The data API serves no dataset index (no GET /api/data/v1/ on
+			// the #1260 -> #1278 chain), so the catalogue is the API's own
+			// unpaid answer for each dataset, in SKU order.
 			try {
-				const res = await getRaw(path);
-				if (res.status !== 200 || res.body === null) {
-					return envelope(res.sourceUrl, {
-						...base,
-						catalog: null,
-						unavailable_reason: errorCode(res.body, res.status),
+				const catalog = [];
+				for (const id of DATASET_IDS) {
+					const path = DATASETS[id];
+					if (!path) throw new Error(`no path for ${id}`);
+					const q = await quoteOnce(path);
+					catalog.push({
+						dataset_id: id,
+						status: q.status,
+						payment_required: q.payment_required,
+						unavailable_reason: q.unavailable_reason,
 					});
 				}
-				return envelope(res.sourceUrl, {
+				const anyOk = catalog.some((e) => e.unavailable_reason === null);
+				return envelope(`${config.apiBaseUrl}${DATA_API}`, {
 					...base,
-					catalog: res.body,
-					unavailable_reason: null,
+					catalog,
+					unavailable_reason: anyOk ? null : "no_dataset_quoted",
 				});
 			} catch (err) {
-				return fail(err, `${config.apiBaseUrl}${path}`, {
+				return fail(err, `${config.apiBaseUrl}${DATA_API}`, {
 					...base,
 					catalog: null,
 					unavailable_reason: null,
@@ -192,7 +255,6 @@ export const registerX402Tools = (server: McpServer): void => {
 			}
 		},
 	);
-
 	/* ---------------------------------------------------------- */
 	/* x402_terms                                                  */
 	/* ---------------------------------------------------------- */
@@ -286,46 +348,12 @@ export const registerX402Tools = (server: McpServer): void => {
 				});
 			}
 			try {
-				const res = await getRaw(path);
-				if (res.status !== 402) {
-					return envelope(res.sourceUrl, {
-						...empty,
-						status: res.status,
-						body: res.body,
-						unavailable_reason: errorCode(res.body, res.status),
-					});
-				}
-				const pr = decodeB64Json(res.headers[HEADER_REQUIRED]);
-				if (pr === null) {
-					return envelope(res.sourceUrl, {
-						...empty,
-						status: res.status,
-						body: res.body,
-						unavailable_reason: "payment_required_header_missing",
-					});
-				}
-				if ((pr as { x402Version?: unknown }).x402Version !== X402_VERSION) {
-					return envelope(res.sourceUrl, {
-						...empty,
-						status: res.status,
-						body: res.body,
-						unavailable_reason: "x402_version_unsupported",
-					});
-				}
-				const nets = quotedNetworks(pr);
-				if (nets.length === 0 || nets.some((n) => n !== config.x402Network)) {
-					return envelope(res.sourceUrl, {
-						...empty,
-						status: res.status,
-						body: res.body,
-						unavailable_reason: "network_mismatch",
-					});
-				}
-				return envelope(res.sourceUrl, {
-					status: res.status,
-					payment_required: pr,
-					body: res.body,
-					unavailable_reason: null,
+				const q = await quoteOnce(path);
+				return envelope(q.sourceUrl, {
+					status: q.status,
+					payment_required: q.payment_required,
+					body: q.body,
+					unavailable_reason: q.unavailable_reason,
 				});
 			} catch (err) {
 				return fail(err, `${config.apiBaseUrl}${path}`, empty);
@@ -350,8 +378,17 @@ export const registerX402Tools = (server: McpServer): void => {
 					.string()
 					.min(1)
 					.max(8192)
+					.optional()
 					.describe(
-						"The base64 PAYMENT-SIGNATURE value produced by YOUR x402 client. Opaque to this server, forwarded verbatim. Never a private key: if a tool ever asks you for one, it is not this tool.",
+						"The base64 PAYMENT-SIGNATURE value produced by YOUR x402 client. Opaque to this server, forwarded verbatim. Never a private key: if a tool ever asks you for one, it is not this tool. Give this OR free_read, not both.",
+					),
+				free_read: z
+					.string()
+					.min(1)
+					.max(4096)
+					.optional()
+					.describe(
+						"Instead of a payment: the base64url X-CTZ-Free-Read value YOUR agent signed for its passport, if the API's free read tier is on. Opaque to this server, forwarded verbatim; this server signs nothing. Give this OR payment_signature, not both.",
 					),
 				receipt_token: z
 					.string()
@@ -371,6 +408,8 @@ export const registerX402Tools = (server: McpServer): void => {
 				served_sha256: z.string().nullable(),
 				data: z.unknown().nullable(),
 				receipt_token: z.string().nullable(),
+				free_read_receipt: z.string().nullable(),
+				free_reads_remaining: z.string().nullable(),
 				body: z.unknown().nullable(),
 				refusal: z.object({ code: z.string() }).nullable(),
 			},
@@ -390,6 +429,8 @@ export const registerX402Tools = (server: McpServer): void => {
 				served_sha256: null,
 				data: null,
 				receipt_token: null,
+				free_read_receipt: null,
+				free_reads_remaining: null,
 				body: null,
 				refusal: null,
 			};
@@ -400,19 +441,35 @@ export const registerX402Tools = (server: McpServer): void => {
 					refusal: { code: "unknown_dataset" },
 				});
 			}
-			// A payload that does not decode, is not v2, or names another
-			// network is not sent anywhere (fail closed).
-			const verdict = checkPayment(args.payment_signature);
-			if (!verdict.ok) {
-				return envelope(config.apiBaseUrl, {
-					...empty,
-					refusal: { code: verdict.code },
-				});
+			// Exactly one authorization: a payment or a free read. The API
+			// only considers a free read when no payment is attached, so
+			// sending both would make the outcome depend on server order.
+			const refuse = (code: string) =>
+				envelope(config.apiBaseUrl, { ...empty, refusal: { code } });
+			const sig = args.payment_signature;
+			const free = args.free_read;
+			if (sig !== undefined && free !== undefined) {
+				return refuse("payment_and_free_read");
 			}
-			const headers: Record<string, string> = {
-				[HEADER_SIGNATURE]: args.payment_signature,
-			};
-			if (args.receipt_token) headers[HEADER_RECEIPT_TOKEN] = args.receipt_token;
+			if (sig === undefined && free === undefined) {
+				return refuse("payment_or_free_read_required");
+			}
+			const headers: Record<string, string> = {};
+			if (sig !== undefined) {
+				// A payload that does not decode, is not v2, or names another
+				// network is not sent anywhere (fail closed).
+				const verdict = checkPayment(sig);
+				if (!verdict.ok) return refuse(verdict.code);
+				headers[HEADER_SIGNATURE] = sig;
+				if (args.receipt_token) {
+					headers[HEADER_RECEIPT_TOKEN] = args.receipt_token;
+				}
+			} else {
+				if (!BASE64URL.test(free as string)) {
+					return refuse("free_read_undecodable");
+				}
+				headers[HEADER_FREE_READ] = free as string;
+			}
 			try {
 				const res = await getRaw(path, headers);
 				const token = res.headers[HEADER_RECEIPT_TOKEN.toLowerCase()] ?? null;
@@ -425,12 +482,23 @@ export const registerX402Tools = (server: McpServer): void => {
 						refusal: { code: errorCode(res.body, res.status) },
 					});
 				}
+				// Free-read headers are reported only for a free read: a paid
+				// delivery never claims a free receipt.
+				const isFree = sig === undefined;
 				return envelope(res.sourceUrl, {
 					...empty,
 					status: res.status,
 					delivered: true,
 					dataset_id: args.dataset_id,
-					payment_response: decodeB64Json(res.headers[HEADER_RESPONSE]),
+					free_read_receipt: isFree
+						? (res.headers[HEADER_FREE_RECEIPT] ?? null)
+						: null,
+					free_reads_remaining: isFree
+						? (res.headers[HEADER_FREE_REMAINING] ?? null)
+						: null,
+					payment_response: isFree
+						? null
+						: decodeB64Json(res.headers[HEADER_RESPONSE]),
 					served_sha256: res.sha256,
 					data: res.body ?? res.text,
 				});

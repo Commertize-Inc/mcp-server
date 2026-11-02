@@ -89,6 +89,17 @@ export const config = {
 		process.env.COMMERTIZE_MCP_ENABLE_X402 !== "1",
 
 	/**
+	 * The one x402 network (CAIP-2) these tools will quote or forward a payment
+	 * for. Defaults to Base Sepolia (testnet). A quote naming any other network
+	 * is not relayed as payable, and a payment naming another network is not
+	 * sent. This is a client-side expectation only; the API decides what it
+	 * accepts.
+	 */
+	x402Network: (process.env.COMMERTIZE_MCP_X402_NETWORK ?? "").trim()
+		? (process.env.COMMERTIZE_MCP_X402_NETWORK as string).trim()
+		: "eip155:84532",
+
+	/**
 	 * Gate for `request_memo`, the server's only write.
 	 *
 	 * NOT a policy gate like the offerings one — a DEPLOYMENT gate. The route

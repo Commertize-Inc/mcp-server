@@ -12,6 +12,8 @@
  *   a caller could read as "no offerings exist".
  */
 
+import { createHash } from "node:crypto";
+
 import { config } from "./config.js";
 
 export type ApiErrorCode =
@@ -82,6 +84,7 @@ const fetchFresh = async (url: string): Promise<CacheEntry> => {
 
 	try {
 		const res = await fetch(url, {
+			redirect: "manual",
 			signal: controller.signal,
 			headers: { accept: "application/json", "user-agent": config.userAgent },
 		});
@@ -222,6 +225,7 @@ export const getJsonAs = async <T>(
 
 	try {
 		const res = await fetch(url, {
+			redirect: "manual",
 			signal: controller.signal,
 			headers: {
 				accept: "application/json",
@@ -313,6 +317,10 @@ export const getRaw = async (
 	text: string;
 	contentType: string;
 	sourceUrl: string;
+	/** Response headers, lower-case names (x402 v2 carries its state here). */
+	headers: Record<string, string>;
+	/** SHA-256 (hex) of the exact response bytes, before any decoding. */
+	sha256: string;
 }> => {
 	const url = `${config.apiBaseUrl}${path}`;
 	const controller = new AbortController();
@@ -320,6 +328,7 @@ export const getRaw = async (
 
 	try {
 		const res = await fetch(url, {
+			redirect: "manual",
 			signal: controller.signal,
 			headers: {
 				accept: "application/json, text/plain",
@@ -327,19 +336,26 @@ export const getRaw = async (
 				...headers,
 			},
 		});
-		const text = await res.text();
+		const bytes = Buffer.from(await res.arrayBuffer());
+		const text = bytes.toString("utf8");
 		let body: unknown = null;
 		try {
 			body = JSON.parse(text);
 		} catch {
 			body = null;
 		}
+		const respHeaders: Record<string, string> = {};
+		res.headers.forEach((v, k) => {
+			respHeaders[k.toLowerCase()] = v;
+		});
 		return {
 			status: res.status,
 			body,
 			text,
 			contentType: res.headers.get("content-type") ?? "",
 			sourceUrl: url,
+			headers: respHeaders,
+			sha256: createHash("sha256").update(bytes).digest("hex"),
 		};
 	} catch (err) {
 		const aborted =
@@ -382,6 +398,7 @@ export const postPublicJson = async <T>(
 
 	try {
 		const res = await fetch(url, {
+			redirect: "manual",
 			method: "POST",
 			signal: controller.signal,
 			headers: {
@@ -463,6 +480,7 @@ export const postJson = async <T>(
 
 	try {
 		const res = await fetch(url, {
+			redirect: "manual",
 			method: "POST",
 			signal: controller.signal,
 			headers: {

@@ -58,6 +58,8 @@ let seenSignature = null;
 let seenXPayment = null;
 let seenToken = null;
 let hits = [];
+let seenFreeRead = null;
+let freeMode = "serve";
 
 const requiredFor = (route) => ({
 	x402Version: stubVersion,
@@ -91,14 +93,9 @@ const server = createServer((req, res) => {
 		res.writeHead(status, { "content-type": "application/json", ...headers });
 		res.end(JSON.stringify(body));
 	};
-	if (p === "/api/data/v1/") {
-		json(200, {
-			datasets: [
-				{ id: "compute-index-latest", amount: stubAmount, network: stubNetwork },
-			],
-		});
-		return;
-	}
+	// The data chain (#1260 -> #1278, head 29f752a6) serves no dataset index
+	// at GET /api/data/v1/: only the terms and the three dataset routes. The
+	// stub answers 404 there, exactly as the chain head would.
 	if (p === "/leak") {
 		leakHits += 1;
 		json(200, { leaked: req.headers["payment-signature"] ?? null });
@@ -118,6 +115,22 @@ const server = createServer((req, res) => {
 		seenSignature = req.headers["payment-signature"] ?? null;
 		seenXPayment = req.headers["x-payment"] ?? null;
 		seenToken = req.headers["x-ctz-receipt-token"] ?? null;
+		seenFreeRead = req.headers["x-ctz-free-read"] ?? null;
+		// #1278: a free read is considered only when no payment is attached.
+		if (!seenSignature && seenFreeRead) {
+			if (freeMode === "spent") {
+				json(402, { error: "free_reads_spent" }, { "PAYMENT-REQUIRED": b64(requiredFor(route)) });
+				return;
+			}
+			res.writeHead(200, {
+				"content-type": "application/json; charset=UTF-8",
+				"cache-control": "no-store",
+				"x-ctz-free-read-receipt": "ctzfr_001",
+				"x-ctz-free-reads-remaining": "4",
+			});
+			res.end(DATA_BYTES);
+			return;
+		}
 		if (!seenSignature) {
 			json(402, BODY_402, { "PAYMENT-REQUIRED": b64(requiredFor(route)) });
 			return;
@@ -261,15 +274,36 @@ section("catalogue and terms are relayed, not authored");
 {
 	const client = await connect(ON);
 	stubAmount = "10000";
+	hits = [];
 	let { payload: cat } = await call(client, "x402_catalog");
-	check("catalogue calls GET /api/data/v1/", hits.includes("/api/data/v1/"));
-	check("catalogue relays the backend amount verbatim", cat.catalog?.datasets?.[0]?.amount === "10000");
+	check("catalogue never calls GET /api/data/v1/ (not served on the chain)", !hits.includes("/api/data/v1/"));
+	check(
+		"catalogue asks each dataset route, unpaid, once",
+		JSON.stringify(hits) === JSON.stringify(ROUTES.map((r) => `/api/data/v1${r}`)),
+		JSON.stringify(hits),
+	);
+	check("catalogue sends no payment while asking", seenSignature === null);
+	check("catalogue has one entry per dataset id", JSON.stringify(cat.catalog?.map((e) => e.dataset_id)) === JSON.stringify(SKUS));
+	check(
+		"catalogue entry relays the decoded PAYMENT-REQUIRED verbatim",
+		JSON.stringify(cat.catalog?.[2]?.payment_required) === JSON.stringify(requiredFor(ROUTES[2])),
+	);
+	check("catalogue relays the backend amount verbatim", cat.catalog?.[0]?.payment_required?.accepts?.[0]?.amount === "10000");
+	check("catalogue entry carries the 402 status", cat.catalog?.[0]?.status === 402 && cat.catalog?.[0]?.unavailable_reason === null);
+	check("catalogue is available when every dataset quoted", cat.unavailable_reason === null);
 	stubAmount = "77777";
 	({ payload: cat } = await call(client, "x402_catalog"));
-	check("a changed backend price shows up changed", cat.catalog?.datasets?.[0]?.amount === "77777");
+	check("a changed backend price shows up changed", cat.catalog?.[0]?.payment_required?.accepts?.[0]?.amount === "77777");
 	check("catalogue lists the client's dataset ids", JSON.stringify(cat.dataset_ids) === JSON.stringify(SKUS));
 	check("catalogue expected network defaults to Base Sepolia", cat.expected_network === SEPOLIA);
 	stubAmount = "10000";
+	stubNetwork = "eip155:8453";
+	({ payload: cat } = await call(client, "x402_catalog"));
+	check(
+		"catalogue: another network is not relayed as payable",
+		cat.catalog?.every((e) => e.payment_required === null && e.unavailable_reason === "network_mismatch"),
+	);
+	stubNetwork = SEPOLIA;
 
 	const { payload: terms } = await call(client, "x402_terms");
 	check("terms returns the raw bytes", terms.text === TERMS_TEXT);
@@ -406,6 +440,47 @@ section("refusals and pending settlement arrive as themselves");
 		receipt_token: "tok123",
 	});
 	check("retry forwards the receipt token", seenToken === "tok123" && r.delivered === true);
+	await client.close();
+}
+
+/* ------------------------------------------------------------------ */
+section("#1278 free read: the caller's X-CTZ-Free-Read is forwarded verbatim, never a payment");
+/* ------------------------------------------------------------------ */
+{
+	const FREE = Buffer.from('{"passportId":"p1","dataset":"ctz-reg-calendar-v1","sig":"0xab"}').toString("base64url");
+	const client = await connect(ON);
+	freeMode = "serve";
+	seenSignature = "unset";
+	const { payload: f } = await call(client, "x402_fetch", { dataset_id: "ctz-reg-calendar-v1", free_read: FREE });
+	check("X-CTZ-Free-Read forwarded byte for byte", seenFreeRead === FREE);
+	check("a free read sends no PAYMENT-SIGNATURE", seenSignature === null);
+	check("free read delivered", f.delivered === true && f.status === 200 && f.data?.index === 1.25);
+	check("free read reports the free receipt id", f.free_read_receipt === "ctzfr_001");
+	check("free read reports the remaining allowance as served", f.free_reads_remaining === "4");
+	check("a free read has no PAYMENT-RESPONSE", f.payment_response === null);
+	check("free read sha256 is over the exact bytes", f.served_sha256 === DATA_SHA);
+
+	freeMode = "spent";
+	const { payload: s } = await call(client, "x402_fetch", { dataset_id: "ctz-reg-calendar-v1", free_read: FREE });
+	check("a spent allowance arrives as itself", s.delivered === false && s.status === 402 && s.refusal?.code === "free_reads_spent");
+	freeMode = "serve";
+
+	const before = hits.length;
+	const { payload: both } = await call(client, "x402_fetch", {
+		dataset_id: SKUS[0],
+		payment_signature: PAYMENT,
+		free_read: FREE,
+	});
+	check("payment and free read together are refused", both.refusal?.code === "payment_and_free_read" && both.delivered === false);
+	const { payload: none } = await call(client, "x402_fetch", { dataset_id: SKUS[0] });
+	check("neither payment nor free read is refused", none.refusal?.code === "payment_or_free_read_required" && none.delivered === false);
+	const { payload: bad } = await call(client, "x402_fetch", { dataset_id: SKUS[0], free_read: "not base64url!" });
+	check("a free read that is not base64url is refused", bad.refusal?.code === "free_read_undecodable" && bad.delivered === false);
+	check("none of those was sent upstream", hits.length === before);
+
+	const { payload: paid } = await call(client, "x402_fetch", { dataset_id: SKUS[0], payment_signature: PAYMENT });
+	check("control: a paid read sends no X-CTZ-Free-Read", seenFreeRead === null && paid.delivered === true);
+	check("control: a paid read reports no free receipt", paid.free_read_receipt === null && paid.free_reads_remaining === null);
 	await client.close();
 }
 

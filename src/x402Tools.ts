@@ -4,7 +4,7 @@
  *   x402_catalog   each dataset with the API's own unpaid quote, relayed as served
  *   x402_terms     the exact licence bytes a payment accepts
  *   x402_quote     ask for a dataset without paying; get the requirements
- *   x402_fetch     present a payment (or #1278 free read) YOU signed; one delivery
+ *   x402_fetch     present a payment (or a free read) YOU signed; one delivery
  *
  * Wire: x402 v2. The API answers an unpaid read with 402 and a base64 JSON
  * `PAYMENT-REQUIRED` header; a paid read carries the caller's signed payload
@@ -65,7 +65,7 @@ export const HEADER_REQUIRED = "payment-required";
 export const HEADER_SIGNATURE = "PAYMENT-SIGNATURE";
 export const HEADER_RESPONSE = "payment-response";
 export const HEADER_RECEIPT_TOKEN = "X-CTZ-Receipt-Token";
-/** #1278 free read tier: the caller's signed passport read, and its answer. */
+/** Free read tier: the caller's signed passport read, and its answer. */
 export const HEADER_FREE_READ = "X-CTZ-Free-Read";
 export const HEADER_FREE_RECEIPT = "x-ctz-free-read-receipt";
 export const HEADER_FREE_REMAINING = "x-ctz-free-reads-remaining";
@@ -224,8 +224,8 @@ export const registerX402Tools = (server: McpServer): void => {
 				dataset_ids: [...DATASET_IDS],
 				expected_network: config.x402Network,
 			};
-			// The data API serves no dataset index (no GET /api/data/v1/ on
-			// the #1260 -> #1278 chain), so the catalogue is the API's own
+			// The data API serves no dataset index (no GET /api/data/v1/),
+			// so the catalogue is the API's own
 			// unpaid answer for each dataset, in SKU order.
 			try {
 				const catalog = [];
@@ -465,6 +465,11 @@ export const registerX402Tools = (server: McpServer): void => {
 					headers[HEADER_RECEIPT_TOKEN] = args.receipt_token;
 				}
 			} else {
+				// A free read has no pending settlement, so a receipt token
+				// with it is a caller mistake: refuse rather than drop it.
+				if (args.receipt_token !== undefined) {
+					return refuse("receipt_token_with_free_read");
+				}
 				if (!BASE64URL.test(free as string)) {
 					return refuse("free_read_undecodable");
 				}

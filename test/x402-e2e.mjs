@@ -59,6 +59,8 @@ let seenXPayment = null;
 let seenToken = null;
 let hits = [];
 let seenFreeRead = null;
+// Private-repo PR ids (#NNNN) and the backend chain head shas never appear here.
+const PRIVATE_REF = new RegExp(["#" + "1[0-9]{3}\\b", "139a" + "7927", "4263" + "6b32", "946b" + "0a12", "29f7" + "52a6"].join("|"));
 let freeMode = "serve";
 
 const requiredFor = (route) => ({
@@ -93,9 +95,9 @@ const server = createServer((req, res) => {
 		res.writeHead(status, { "content-type": "application/json", ...headers });
 		res.end(JSON.stringify(body));
 	};
-	// The data chain (#1260 -> #1278, head 29f752a6) serves no dataset index
+	// The data API serves no dataset index
 	// at GET /api/data/v1/: only the terms and the three dataset routes. The
-	// stub answers 404 there, exactly as the chain head would.
+	// stub answers 404 there, exactly as the API does.
 	if (p === "/leak") {
 		leakHits += 1;
 		json(200, { leaked: req.headers["payment-signature"] ?? null });
@@ -116,7 +118,7 @@ const server = createServer((req, res) => {
 		seenXPayment = req.headers["x-payment"] ?? null;
 		seenToken = req.headers["x-ctz-receipt-token"] ?? null;
 		seenFreeRead = req.headers["x-ctz-free-read"] ?? null;
-		// #1278: a free read is considered only when no payment is attached.
+		// Free read tier: a free read is considered only when no payment is attached.
 		if (!seenSignature && seenFreeRead) {
 			if (freeMode === "spent") {
 				json(402, { error: "free_reads_spent" }, { "PAYMENT-REQUIRED": b64(requiredFor(route)) });
@@ -444,7 +446,7 @@ section("refusals and pending settlement arrive as themselves");
 }
 
 /* ------------------------------------------------------------------ */
-section("#1278 free read: the caller's X-CTZ-Free-Read is forwarded verbatim, never a payment");
+section("free read: the caller's X-CTZ-Free-Read is forwarded verbatim, never a payment");
 /* ------------------------------------------------------------------ */
 {
 	const FREE = Buffer.from('{"passportId":"p1","dataset":"ctz-reg-calendar-v1","sig":"0xab"}').toString("base64url");
@@ -476,7 +478,11 @@ section("#1278 free read: the caller's X-CTZ-Free-Read is forwarded verbatim, ne
 	check("neither payment nor free read is refused", none.refusal?.code === "payment_or_free_read_required" && none.delivered === false);
 	const { payload: bad } = await call(client, "x402_fetch", { dataset_id: SKUS[0], free_read: "not base64url!" });
 	check("a free read that is not base64url is refused", bad.refusal?.code === "free_read_undecodable" && bad.delivered === false);
+	const { payload: rt } = await call(client, "x402_fetch", { dataset_id: SKUS[0], free_read: FREE, receipt_token: "tok123" });
+	check("receipt_token with a free read is refused", rt.refusal?.code === "receipt_token_with_free_read" && rt.delivered === false);
 	check("none of those was sent upstream", hits.length === before);
+	check("no-leak scan: no private PR ids or shas in src or tests", ![readFileSync(path.join(SRC, "x402Tools.ts"), "utf8"), readFileSync(fileURLToPath(import.meta.url), "utf8")].some((t) => PRIVATE_REF.test(t)));
+	check("no-leak scan has teeth", PRIVATE_REF.test("see #" + "1278") && PRIVATE_REF.test("head " + "29f7" + "52a6"));
 
 	const { payload: paid } = await call(client, "x402_fetch", { dataset_id: SKUS[0], payment_signature: PAYMENT });
 	check("control: a paid read sends no X-CTZ-Free-Read", seenFreeRead === null && paid.delivered === true);
@@ -485,4 +491,4 @@ section("#1278 free read: the caller's X-CTZ-Free-Read is forwarded verbatim, ne
 }
 
 server.close();
-summary("x402 e2e");
+process.exit(summary("x402 e2e") === 0 ? 0 : 1);

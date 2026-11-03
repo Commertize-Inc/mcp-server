@@ -1,6 +1,6 @@
 # Commertize Agents
 
-MCP server for Commertize, the digital capital markets platform for real-world assets.
+Commertize is infrastructure for tokenizing real-world assets and for agentic commerce. This MCP server lets an AI client read Commertize's public news feed. It runs locally over stdio and needs no account.
 
 This listing is reference information. It is not an offer to sell or a solicitation of an offer to buy any security.
 
@@ -83,3 +83,5 @@ Apache-2.0. See [LICENSE](LICENSE).
 ---
 
 Nothing in this repository, or returned by any tool in it, is an offer, a solicitation, or a recommendation to buy or sell any security, or investment, legal, or tax advice.
+
+Informational only. Not an offer to sell or a solicitation to buy any security. Features marked testnet are not live.

@@ -128,7 +128,7 @@ section("platform_info");
 	check(
 		"platform_info: states agents cannot transact",
 		(payload.markdown ?? "").includes(
-			"No tool in this server can transact"
+			"This server has no write tool."
 		)
 	);
 	// Positive control for the empty WRITE_TOOLS list: every tool this server

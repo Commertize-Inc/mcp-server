@@ -36,14 +36,13 @@ export const createServer = (surface: ToolSurface = "stdio"): McpServer => {
 		{
 			capabilities: { tools: {} },
 			instructions:
-				"Commertize is a digital capital markets platform for real-world assets. " +
-				"This server exposes PUBLIC, READ-ONLY marketplace data: offerings and their " +
-				"public terms, platform statistics, published news and commentary, and curated " +
-				"platform reference text. Call platform_info first if you are unfamiliar with " +
-				"the platform. Nothing here is an offer, a solicitation, or a recommendation, " +
-				"and no tool can transact or create an obligation. Every response carries an " +
-				"as_of timestamp, the upstream source URL, and a disclaimer — carry them into " +
-				"anything you report. Null means not disclosed; it never means zero.",
+				"Commertize builds infrastructure for tokenizing real-world assets and for agentic commerce. " +
+				"This server exposes PUBLIC, READ-ONLY information: listing records (informational only; " +
+				"no offering is open on Commertize today), published news, and curated platform reference " +
+				"text. Call platform_info first if you are unfamiliar with Commertize. Nothing here is an " +
+				"offer, a solicitation, or a recommendation, and no tool can transact or create an obligation. " +
+				"Every response carries an as_of timestamp, the upstream source URL, and a disclaimer; carry " +
+				"them into anything you report. Null means not disclosed; it never means zero.",
 		}
 	);
 

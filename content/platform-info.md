@@ -21,7 +21,7 @@ The platform's data model covers commercial real estate, carbon credits, mining 
 
 ## What agents can and cannot do
 
-**Can (this server, no credentials):** read public listing data, platform-level counts, published news and commentary, and this reference text.
+**Can (this server, no credentials):** read public listing records (informational only), published news, and this reference text.
 
 **Cannot:** read non-public records, documents or personal data; subscribe, transfer, claim or take any action that moves value or creates an obligation. This server has no write tool.
 

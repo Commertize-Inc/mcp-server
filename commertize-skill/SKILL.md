@@ -1,27 +1,20 @@
 ---
 name: commertize
-description: Read the Commertize marketplace of tokenized real-world assets — list live offerings and their public terms (asset class, location, status, exemption, tokenomics, SPV leverage disclosure) and read published market commentary. Use for questions about what is listed on Commertize, how a specific Commertize offering is structured, or how the platform verifies investors and sponsors. Do NOT use for other tokenization platforms, for generic real-estate data, or to transact — nothing here can transact, and as the server ships it has no write tool at all.
+description: Read Commertize's public listing records (informational only) for tokenized real-world assets, including each record's public fields (asset class, location, status, exemption code, token terms, SPV leverage disclosure), and read Commertize's published news. Use it for questions about what Commertize lists or how a specific Commertize listing record is described. Do NOT use it for other platforms, for generic real-estate data, or to transact. Nothing here can transact, and as shipped there is no write tool.
 ---
 
 # Commertize
 
-Commertize is a digital capital markets platform for real-world assets. Sponsors list offerings on it, and investors complete identity verification on the platform before they can take part.
+Commertize builds infrastructure for tokenizing real-world assets and for agentic commerce. This skill reads its public listing records. They are informational records, not offers. No offering is open on Commertize today, and nothing in this skill can be used to buy, sell or commit to anything.
 
-This skill covers the **public, read-only** surface. Everything below can be called
-with no credentials. There is no authenticated route, no key, and no action that moves
-value in this skill.
+This skill covers the **public, read-only** surface. Everything below can be called with no credentials. There is no authenticated route, no key, and no action that moves value.
 
 ## Start here
 
-1. **Platform reference**: read §"What is listed" below for how offerings are structured.
-2. **Offerings**: `GET https://api.commertize.com/api/listings` — the live public
-   marketplace set.
-3. **Commentary**: `GET https://api.commertize.com/api/news?limit=20` — published
-   articles; `GET /api/news/{slug}` for one full body.
-4. **MCP alternative**: if your runtime speaks MCP, the same surface is available as
-   typed tools (`list_offerings`, `get_offering`, `get_news`, `get_article`,
-   `platform_info`) with schemas, cache metadata, and a
-   disclaimer on every response. See `references/mcp-server.md`.
+1. **Platform reference**: read §5 below for how an asset is typically structured.
+2. **Listing records**: `GET https://api.commertize.com/api/listings` returns the set of records that are publicly viewable.
+3. **News**: `GET https://api.commertize.com/api/news?limit=20` returns published articles. `GET /api/news/{slug}` returns one full body.
+4. **MCP alternative**: if your runtime speaks MCP, the same surface is available as typed tools (`list_offerings` and `get_offering`, which read listing records despite their names, plus `get_news`, `get_article` and `platform_info`). Each tool has a schema, cache metadata and a disclaimer on every response. See `references/mcp-server.md`.
 
 ## Quick setup
 
@@ -30,135 +23,94 @@ export COMMERTIZE_API="https://api.commertize.com"
 curl -sS "$COMMERTIZE_API/api/listings" | jq '.[] | {id, name, city, state, propertyType, status, offeringType}'
 ```
 
-No key, no header, no registration. Cache responses for about 60 seconds; the public
-read routes are rate limited (120 requests/minute for listings and news).
+No key, no header, no registration. Cache responses for about 60 seconds. The public read routes are rate limited to 120 requests per minute for listings and news.
 
-## 1. Read the marketplace
+## 1. Read the listing records
 
 ```http
 GET /api/listings
 ```
 
-Returns the offerings in a publicly viewable status (`ACTIVE`, `FULLY_FUNDED`,
-`TOKENIZING`) with the fields the public marketplace renders:
+This returns records whose `status` is `ACTIVE`, `FULLY_FUNDED` or `TOKENIZING`, with these fields:
 
 | Field | Meaning |
 |---|---|
-| `id` | Offering UUID. Use it to reference a specific offering. |
-| `name`, `city`, `state` | Asset identity. Street address is not public. |
+| `id` | Record UUID. Use it to refer to one listing. |
+| `name`, `city`, `state` | Asset identity. The street address is not public. |
 | `propertyType` | Asset class, e.g. `MULTIFAMILY`, `HOSPITALITY`, `OFFICE`, `DATA_CENTERS`. |
-| `status` | `ACTIVE` is the only status open for subscription. |
-| `offeringType` | Securities exemption: `RULE_506_B`, `RULE_506_C`, `REG_A`, `REG_CF`, `REG_S`. |
-| `sponsor` | `{ id, businessName }` — the issuer of that offering. |
-| `tokenomics` | `tokenPrice`, `totalTokenSupply`, `tokensForInvestors`, `tokensForSponsor`, `tokensForTreasury`, `minInvestmentTokens`, `maxInvestmentTokens`, `lockupMonths`. Fields may be absent. |
-| `financials` | Sponsor-supplied figures for the asset. Fields may be absent. |
+| `status` | Record status code (see `references/data-model.md`). A status code is a label on the record. It does not mean anything is open or available to buy. |
+| `offeringType` | Code for the securities exemption the sponsor has named for the asset (`RULE_506_B`, `RULE_506_C`, `REG_A`, `REG_CF`, `REG_S`). It is a record field only. |
+| `sponsor` | `{ id, businessName }`, the sponsor that supplied the record. |
+| `tokenomics` (per-asset token terms; not a Commertize token) | `tokenPrice`, `totalTokenSupply`, `tokensForInvestors`, `tokensForSponsor`, `tokensForTreasury`, `minInvestmentTokens`, `maxInvestmentTokens`, `lockupMonths`. These are sponsor-entered record fields: informational; no offering is open on Commertize today. Fields may be absent. |
+| `financials` | Figures the sponsor supplied for the asset. Fields may be absent. |
 
-Derived values, computed the same way the platform computes them:
+The one derived value this skill supports:
 
-- Offering size = `tokenomics.tokensForInvestors x tokenomics.tokenPrice`
-- Minimum subscription = `tokenomics.minInvestmentTokens x tokenomics.tokenPrice`
-- SPV leverage = `spvDebtAmount / assetValue`, where `assetValue` is the current
-  appraisal, else the purchase price, else the acquisition cost — in that order.
+- SPV leverage = `spvDebtAmount / assetValue`, where `assetValue` is the current appraisal, else the purchase price, else the acquisition cost, in that order.
 
-**A missing field means "not disclosed". It never means zero.** Report undisclosed
-figures as "Not disclosed"; never render an offering with no disclosed debt as
-unlevered, and never substitute `0` for an absent number.
+Do not multiply token fields together to produce a raise size, a minimum amount or a valuation. Report each token field as the sponsor entered it.
 
-## 2. Read one offering
+**A missing field means "not disclosed". It never means zero.** Report an undisclosed figure as "Not disclosed". Never describe a record with no disclosed debt as unlevered, and never put `0` in place of an absent number.
+
+## 2. Read one listing record
 
 There is no public detail endpoint. Filter the list response by `id`:
 
 ```bash
-curl -sS "$COMMERTIZE_API/api/listings" | jq --arg id "$OFFERING_ID" '.[] | select(.id == $id)'
+curl -sS "$COMMERTIZE_API/api/listings" | jq --arg id "$LISTING_ID" '.[] | select(.id == $id)'
 ```
 
-The full listing record — offering documents, sponsor diligence, funding progress,
-investor data, escrow state, street address — is authenticated and is not reachable
-from this skill. Do not infer those values; say they are not public.
+Anything beyond these public fields (documents, sponsor diligence, personal data, street address) is not public and cannot be reached from this skill. Do not infer it. Say it is not public.
 
 ## 3. Platform statistics
 
-Not public. `GET /api/stats/platform` requires a signed-in session and is out of scope
-for this skill; do not report platform-wide counts.
+Not public. `GET /api/stats/platform` requires a signed-in session and is outside this skill. Do not report platform-wide counts.
 
-## 4. Read market commentary
+## 4. Read news
 
 ```http
 GET /api/news?limit=20
 GET /api/news/{slug}
 ```
 
-Articles carry `slug`, `title`, `summary`, `category`, `publishedAt`, `readTime`,
-`imageUrl`, and an HTML `content` body. The body embeds a JSON-LD `<script>` block —
-strip script tags before reading it as prose, or you will read the metadata twice.
-Public permalink: `https://commertize.com/news/{slug}`.
+Articles carry `slug`, `title`, `summary`, `category`, `publishedAt`, `readTime`, `imageUrl`, and an HTML `content` body. The body embeds a JSON-LD `<script>` block. Strip script tags before reading the body as prose, or you will read the metadata twice. Public permalink: `https://commertize.com/news/{slug}`.
 
-This is Commertize's own editorial view. Attribute it as such; it is not independent
-research.
+This is Commertize's own editorial view. Attribute it to Commertize. It is not independent research.
 
-## 5. What is listed, and how it is structured
+## 5. How an asset is typically structured
 
-- Asset classes modelled by the platform: commercial real estate (the live category),
-  carbon credits, mining land, oil and gas.
-- Each asset sits in its own special-purpose vehicle (SPV). A token is a membership
-  interest in that SPV, not direct title to the asset. Where the SPV carries debt, the
-  token tracks the equity residual — which is why the leverage disclosure matters.
-- Each distribution the issuer declares is calculated and recorded per holder. Frequency
-  and waterfall terms are set per offering and are disclosed in that offering's
-  documents.
-- A token moves only between wallets verified in the identity registry or exempted by
-  the platform; minting needs a verified or exempt receiver.
-
-## 6. Verification and who may participate
-
-- Investors complete identity verification and sanctions screening before they can
-  subscribe; accreditation is established where the exemption requires it.
-- Sponsors complete business verification covering the entity, its beneficial owners,
-  and its authority to make the offering, before a listing goes live.
-- Verification attaches to a natural or legal person. An agent has no standing of its
-  own; any agent-initiated action must resolve to a verified principal who
-  authorised it.
+- The platform's data model covers commercial real estate, carbon credits, mining land, and oil and gas. Listing data is informational only.
+- An asset is usually held in its own special-purpose vehicle (SPV). A token is designed to represent an interest in that SPV, not direct title to the asset. If the SPV carries debt, that interest sits behind the debt, which is why the leverage disclosure matters.
+- Any terms for distributions, transfers and eligibility are set by the sponsor in that asset's own documents.
+- The contracts are designed so that a token moves only to wallets the asset's transfer rules allow. They are deployed on test networks only. Nothing on-chain described here is live on a main network.
 
 ## Rules for agents using this skill
 
-1. **Nothing here transacts.** The default server registers no write tool at all: the
-   feasibility-memo request (`request_memo`) is not deployed and is switched off, so
-   `tools/list` is all reads. Where an operator has enabled it, it still moves no value:
-   it records a request for a memo about the user's own asset. Nothing subscribes,
-   transfers, claims, or commits anyone to anything. If a user asks you to invest,
-   explain that participation runs through verified onboarding at
-   https://app.commertize.com and stop.
-2. **Never present this data as an offer.** Offerings are private placements under
-   exemptions from registration. Rule 506(b) offerings in particular permit no general
-   solicitation: treat those records as reference information only.
-3. **Carry the disclaimer** into anything you report: informational only; not an offer,
-   solicitation, or recommendation; not investment, legal, or tax advice.
-4. **Distinguish disclosed from derived from projected.** Sponsor disclosures, values
-   you computed, and sponsor projections are three different things, and projections
-   are estimates that may not be achieved.
-5. **Timestamp everything.** State when you fetched the data. Listing status changes.
-6. **Say "not public" rather than estimating.** Funding progress, documents, and
-   investor data are not available; an estimate would be a fabrication.
+1. **Nothing here transacts.** The default server registers no write tool. The feasibility-memo request (`request_memo`) is not deployed and is switched off, so `tools/list` returns reads only. Nothing buys, transfers, claims or commits anyone to anything. If a user asks to put money into an asset, say that no offering is open on Commertize today and that this skill cannot take part in any transaction, then stop.
+2. **Never present this data as an offer.** These records are informational. No offering is open on Commertize today. Do not describe any record as available, open or investable.
+3. **Carry the disclaimer** into anything you report: informational only; not an offer, solicitation or recommendation; not investment, legal or tax advice.
+4. **Keep disclosed, derived and projected apart.** What the sponsor disclosed, what you computed (leverage only) and what the sponsor projects are three different things. Projections are estimates that may not be achieved.
+5. **Timestamp everything.** State when you fetched the data. Record status changes.
+6. **Say "not public" rather than estimating.** Any estimate of a non-public value would be a fabrication.
 
 ## Typical errors
 
 | HTTP | Meaning |
 |---|---|
-| 401 | You called an authenticated route. No route in this skill requires auth; re-read the path. |
-| 404 | Unknown article slug, or an offering that is not in a publicly viewable status. |
-| 429 | Rate limited. Back off and reuse cached responses; the read limits are per minute. |
-| 500 | Upstream error. Retry with backoff; do not report an empty list as "no offerings". |
+| 401 | You called an authenticated route. No route in this skill needs auth. Re-read the path. |
+| 404 | Unknown article slug, or a record that is not publicly viewable. |
+| 429 | Rate limited. Back off and reuse cached responses. The read limits are per minute. |
+| 500 | Upstream error. Retry with backoff. Do not report an empty list as "no listings". |
 
 ## References
 
 - `references/api-reference.md`: endpoint-by-endpoint reference for the public surface
-- `references/data-model.md`: enumerations, tokenomics fields, and the leverage derivation
+- `references/data-model.md`: status codes, token terms fields, and the leverage derivation
 - `references/mcp-server.md`: the same surface as MCP tools, with typed schemas
 
 ## Links
 
 - Platform: https://commertize.com
-- How it works: https://commertize.com/how-it-works
 - Documentation: https://commertize.com/docs
 - News: https://commertize.com/news
-- App (sign-in required): https://app.commertize.com
+- Disclaimer: https://commertize.com/disclaimer

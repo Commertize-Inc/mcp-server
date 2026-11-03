@@ -44,7 +44,7 @@ served; the data is real but old, and `as_of` says how old.
 - `projections.*` are forward-looking sponsor estimates and carry a note saying so.
 - `spv_leverage: null` with `spv_leverage_display: "Not disclosed"` is not zero
   leverage.
-- `status.accepting_investment` is `true` only for `ACTIVE`.
+- `status.accepting_investment` (MCP only) is always `false`; no offering is open on Commertize today.
 
 ## Error codes
 

@@ -64,7 +64,7 @@ export const offeringSchema = z.object({
 		accepting_investment: z
 			.boolean()
 			.describe(
-				"True only for ACTIVE offerings. Any other status is closed to new subscriptions."
+				"Always false on this server: no offering is open on Commertize today. The field is kept for schema stability; a status code alone never means a record is open."
 			),
 	}),
 	offering: z.object({
@@ -96,14 +96,18 @@ export const offeringSchema = z.object({
 	derived: z
 		.object({
 			target_raise: nullableNumber().describe(
-				"tokens_for_investors x token_price. Null if either input is undisclosed."
+				"Arithmetic only: tokens_for_investors x token_price, both sponsor-entered. Informational; no offering is open on Commertize today, so this is not an amount being raised. Null if either input is undisclosed."
 			),
 			min_investment_amount: nullableNumber().describe(
-				"min_investment_tokens x token_price. Null if either input is undisclosed."
+				"Arithmetic only: min_investment_tokens x token_price, both sponsor-entered. Informational; no offering is open on Commertize today, so this is not a minimum anyone can invest. Null if either input is undisclosed."
 			),
-			implied_equity_valuation: nullableNumber(),
+			implied_equity_valuation: nullableNumber().describe(
+				"Platform-computed from sponsor-entered figures. Arithmetic, not an appraisal or a Commertize opinion of value. Null if inputs are undisclosed."
+			),
 			effective_appraisal_value: nullableNumber(),
-			cap_rate: nullableNumber().describe("Decimal fraction, e.g. 0.055 = 5.5%."),
+			cap_rate: nullableNumber().describe(
+				"Platform-computed from sponsor-entered figures; decimal fraction (0.055 = 5.5%). Not a forecast or a Commertize view. Null if inputs are undisclosed."
+			),
 		})
 		.describe(
 			"Computed from disclosed inputs by the platform or this server. Not sponsor disclosures in their own right."
@@ -250,7 +254,7 @@ export const sponsorSummarySchema = z.object({
 		.number()
 		.nullable()
 		.describe(
-			"Sum of target_raise over ONLY the offerings that disclose one. Not a total. Null when none disclose it."
+			"Sum of target_raise (arithmetic on sponsor-entered fields) over ONLY the records that disclose its inputs. Not a total, and not an amount being raised: no offering is open on Commertize today. Null when none disclose it."
 		),
 	target_raise_disclosed_count: z.number(),
 	not_available: z

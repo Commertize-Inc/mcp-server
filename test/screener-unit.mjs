@@ -180,13 +180,19 @@ section("3. categorical filters");
 		ids(screenOfferings(set, { status: "TOKENIZING" })).join() === "b,c"
 	);
 	check(
-		"accepting_investment true selects only ACTIVE",
-		ids(screenOfferings(set, { accepting_investment: true })).join() === "a"
+		"accepting_investment true matches nothing (AXIOM 4-1(a) 2026-11-03)",
+		ids(screenOfferings(set, { accepting_investment: true })).join() === ""
 	);
 	check(
-		"accepting_investment FALSE selects the rest — not ignored as falsy",
-		ids(screenOfferings(set, { accepting_investment: false })).join() === "b,c"
+		"accepting_investment FALSE selects every record — not ignored as falsy",
+		ids(screenOfferings(set, { accepting_investment: false })).join() === "a,b,c"
 	);
+	for (const code of ["ACTIVE", "FULLY_FUNDED", "TOKENIZING", "DISTRIBUTED", "REFUNDED", "FROZEN", "PENDING_REVIEW", "REJECTED", "WITHDRAWN", "active", ""]) {
+		check(
+			`no record returns accepting_investment=true (status ${JSON.stringify(code)})`,
+			off({ status: code }).status.accepting_investment === false
+		);
+	}
 	check(
 		"query matches the sponsor name, not only the offering name",
 		ids(screenOfferings(set, { query: "acme" })).length === 3
@@ -473,7 +479,7 @@ section("6. comparison");
 		"a boolean field compares as a boolean, not as a truthy string",
 		compareOfferings([a, quiet]).rows.find(
 			(r) => r.field === "accepting_investment"
-		).values.join() === "true,true"
+		).values.every((v) => v === false) // AXIOM 4-1(a): always false; strict boolean, not "false"
 	);
 }
 

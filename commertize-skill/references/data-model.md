@@ -16,6 +16,8 @@ All fields below are informational record fields. No offering is open on Commert
 
 Only `ACTIVE`, `FULLY_FUNDED` and `TOKENIZING` appear in the public list response. A status code is a label on a record. No status means that a record is open, available or investable on Commertize today.
 
+`status.accepting_investment` (MCP only) is always `false`; no offering is open on Commertize today.
+
 ## Exemption code (`offeringType`)
 
 The field holds the code for the securities exemption the sponsor has named. The field name is historical. It does not mean an offering is open.
@@ -51,7 +53,7 @@ Sponsor-entered record fields: informational; no offering is open on Commertize 
 | `maxInvestmentTokens` | Per-holder cap the sponsor entered; absent means none disclosed |
 | `lockupMonths` | Transfer-restriction period the sponsor entered, in months |
 
-Report these fields as entered. Do not multiply them into a raise size, a minimum amount or a valuation.
+Report these fields as entered. Some surfaces (the MCP server's `derived` block, and the trailing fields of `/api/listings`) return arithmetic on these fields, such as `target_raise`, `min_investment_amount`, an implied equity valuation and a cap rate. Report them as returned and label each one as arithmetic on sponsor-entered figures. None is an amount being raised, a minimum anyone can invest, an appraisal or a forecast: no offering is open on Commertize today. Do not compute any of them yourself where the surface does not return them.
 
 ## SPV leverage disclosure
 

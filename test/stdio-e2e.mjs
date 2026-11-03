@@ -161,10 +161,8 @@ let sampleId = null;
 	check("offering: has a name", typeof o?.name === "string");
 	check("offering: status carries a label", typeof o?.status?.label === "string");
 	check(
-		"offering: accepting_investment is false for non-ACTIVE",
-		payload.offerings.every(
-			(x) => x.status.accepting_investment === (x.status.code === "ACTIVE")
-		)
+		"offering: accepting_investment is always false (AXIOM 4-1(a) 2026-11-03)",
+		payload.offerings.every((x) => x.status.accepting_investment === false)
 	);
 	check(
 		"offering: street address never present",

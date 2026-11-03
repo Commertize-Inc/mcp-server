@@ -175,7 +175,7 @@ export const registerTools = (
 		{
 			title: "List Commertize listing records",
 			description:
-				"List Commertize's public listing records for real-world assets (informational only; no offering is open on Commertize today), with public record fields: asset class, location, status, exemption code, sponsor, `tokenomics` (per-asset token terms; not a Commertize token), and derived offering size. The tool name `list_offerings` is historical; it reads listing records. Public data only; no authentication. Filters are applied to the public set, they do not widen it. Informational reference data — not an offer, solicitation, or recommendation.",
+				"List Commertize's public listing records for real-world assets (informational only; no offering is open on Commertize today), with public record fields: asset class, location, status, exemption code, sponsor, `tokenomics` (per-asset token terms; not a Commertize token), and `target_raise` (arithmetic on sponsor-entered fields). The tool name `list_offerings` is historical; it reads listing records. Public data only; no authentication. Filters are applied to the public set, they do not widen it. Informational reference data — not an offer, solicitation, or recommendation.",
 			inputSchema: {
 				status: z
 					.enum(["ACTIVE", "FULLY_FUNDED", "TOKENIZING"])

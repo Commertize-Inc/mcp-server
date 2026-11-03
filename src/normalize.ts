@@ -68,8 +68,13 @@ const STATUS_LABELS: Record<string, string> = {
 	FROZEN: "Frozen",
 };
 
-/** Only ACTIVE takes new subscriptions. Everything else is a hard no. */
-const ACCEPTING = new Set(["ACTIVE"]);
+/**
+ * Empty by AXIOM ruling 4-1(a), 2026-11-03: no offering is open on Commertize
+ * today, so `accepting_investment` is always false. It stays empty until AXIOM
+ * rules in writing that an offering is open. The schema field is kept for
+ * caller stability.
+ */
+const ACCEPTING = new Set<string>([]);
 
 const ASSET_CLASS_LABELS: Record<string, string> = {
 	MULTIFAMILY: "Multifamily",

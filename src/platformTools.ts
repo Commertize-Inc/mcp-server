@@ -81,7 +81,7 @@ const deploymentShape = z
 			),
 		route: z.string().describe("The API path this tool reads."),
 	})
-	.describe("Whether the route is live on the API this server points at.");
+	.describe("Whether the API this server points at serves this route. It says nothing about whether any payment, escrow or on-chain feature is live.");
 
 const outputSchema = {
 	...envelopeShape,

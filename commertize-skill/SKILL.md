@@ -48,7 +48,9 @@ The one derived value this skill supports:
 
 - SPV leverage = `spvDebtAmount / assetValue`, where `assetValue` is the current appraisal, else the purchase price, else the acquisition cost, in that order.
 
-Do not multiply token fields together to produce a raise size, a minimum amount or a valuation. Report each token field as the sponsor entered it.
+Report each token field as the sponsor entered it. Some surfaces (the MCP server's `derived` block, and the trailing fields of `/api/listings`) return arithmetic on these fields, such as `target_raise`, `min_investment_amount`, an implied equity valuation and a cap rate. Report them as returned and label each one as arithmetic on sponsor-entered figures. None is an amount being raised, a minimum anyone can invest, an appraisal or a forecast: no offering is open on Commertize today. Do not compute any of them yourself where the surface does not return them.
+
+`status.accepting_investment` (MCP only) is always `false`; no offering is open on Commertize today.
 
 **A missing field means "not disclosed". It never means zero.** Report an undisclosed figure as "Not disclosed". Never describe a record with no disclosed debt as unlevered, and never put `0` in place of an absent number.
 

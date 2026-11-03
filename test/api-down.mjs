@@ -419,7 +419,7 @@ section("4. upstream dies after one good response (stale serve)");
 	check("leverage basis is the purchase price", o.spv_leverage?.basis === "PURCHASE_PRICE");
 	check("leverage display formatted", o.spv_leverage_display === "40.0%", o.spv_leverage_display);
 	check("506(c) gets no 506(b) note", o.offering.note === null);
-	check("ACTIVE listing accepts investment", o.status.accepting_investment === true);
+	check("ACTIVE record still returns accepting_investment=false (AXIOM 4-1(a) 2026-11-03)", o.status.accepting_investment === false);
 
 	const firstAsOf = first.payload.as_of;
 	serve = false;

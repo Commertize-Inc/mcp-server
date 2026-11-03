@@ -5,7 +5,7 @@ read-only. Paths are also served without the `/api` prefix; prefer `/api`.
 
 ## GET /api/listings
 
-The live public marketplace set. No parameters. Returns a JSON array.
+The public set of listing records (informational only; no offering is open on Commertize today). No parameters. Returns a JSON array.
 
 Included statuses: `ACTIVE`, `FULLY_FUNDED`, `TOKENIZING`. Anything in review,
 withdrawn, rejected, or frozen is absent from this response.
@@ -34,8 +34,7 @@ Returned fields per listing:
 }
 ```
 
-The six trailing fields are platform-derived and are `null` unless the inputs they
-depend on have been disclosed. `financials` and `tokenomics` are JSON objects that may
+The six trailing fields are computed by the platform from sponsor-entered figures (arithmetic only, not an appraisal, forecast or amount being raised; no offering is open on Commertize today) and are `null` unless their inputs have been disclosed. `financials` and `tokenomics` (per-asset token terms; not a Commertize token) are JSON objects that may
 be empty for a listing still being structured.
 
 Rate limit: 120 requests per minute per client.

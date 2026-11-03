@@ -1,62 +1,65 @@
 # Commertize data model (public fields)
 
-## Listing status
+All fields below are informational record fields. No offering is open on Commertize today.
 
-| Code | Meaning | Open for subscription |
-|---|---|---|
-| `TOKENIZING` | Entities and contracts being finalised, tokens being minted | No |
-| `ACTIVE` | Live offering, accepting subscriptions from verified investors | **Yes** |
-| `FULLY_FUNDED` | Allocation reached, closed to new subscriptions | No |
-| `DISTRIBUTED` | Escrow released and tokens distributed | No |
-| `REFUNDED` | Escrow returned to subscribers | No |
-| `FROZEN` | Halted | No |
-| `PENDING_REVIEW`, `REJECTED`, `WITHDRAWN` | Not publicly viewable | No |
+## Record status (`status`)
 
-Only `ACTIVE`, `FULLY_FUNDED`, and `TOKENIZING` appear in the public list response.
+| Code | What the label records |
+|---|---|
+| `TOKENIZING` | The sponsor's entity and contract setup is in progress |
+| `ACTIVE` | The sponsor has marked the record active |
+| `FULLY_FUNDED` | The sponsor's stated allocation is recorded as reached |
+| `DISTRIBUTED` | Tokens are recorded as distributed |
+| `REFUNDED` | Funds are recorded as returned |
+| `FROZEN` | Halted |
+| `PENDING_REVIEW`, `REJECTED`, `WITHDRAWN` | Not publicly viewable |
 
-## Securities exemption (`offeringType`)
+Only `ACTIVE`, `FULLY_FUNDED` and `TOKENIZING` appear in the public list response. A status code is a label on a record. No status means that a record is open, available or investable on Commertize today.
 
-| Code | Exemption | Participation |
-|---|---|---|
-| `RULE_506_B` | Regulation D, Rule 506(b) | No general solicitation. Requires a pre-existing substantive relationship. |
-| `RULE_506_C` | Regulation D, Rule 506(c) | General solicitation permitted; every purchaser must be a verified accredited investor. |
-| `REG_A` | Regulation A | Tier-based caps and disclosure requirements. |
-| `REG_CF` | Regulation Crowdfunding | Portal-based, capped. |
-| `REG_S` | Regulation S | Offshore. |
+`status.accepting_investment` (MCP only) is always `false`; no offering is open on Commertize today.
+
+## Exemption code (`offeringType`)
+
+The field holds the code for the securities exemption the sponsor has named. The field name is historical. It does not mean an offering is open.
+
+| Code | Exemption named |
+|---|---|
+| `RULE_506_B` | Regulation D, Rule 506(b) |
+| `RULE_506_C` | Regulation D, Rule 506(c) |
+| `REG_A` | Regulation A |
+| `REG_CF` | Regulation Crowdfunding |
+| `REG_S` | Regulation S |
+
+Do not explain to a user who may qualify under an exemption. Report only the code and its name.
 
 ## Asset classes
 
-`listingType`: `COMMERCIAL_REAL_ESTATE` (live), `CARBON_CREDITS`, `MINING_LAND`,
-`OIL_AND_GAS`.
+`listingType`: `COMMERCIAL_REAL_ESTATE`, `CARBON_CREDITS`, `MINING_LAND`, `OIL_AND_GAS`. These are categories in the data model. They are not claims that any asset is available.
 
-`propertyType` (CRE): `MULTIFAMILY`, `OFFICE`, `RETAIL`, `INDUSTRIAL`, `MIXED_USE`,
-`HOSPITALITY`, `DATA_CENTERS`, `SELF_STORAGE`, `HEALTHCARE`, `STUDENT_HOUSING`,
-`SENIOR_LIVING`, `AGRICULTURAL`, `PARKING`, `OTHER`.
+`propertyType` (commercial real estate): `MULTIFAMILY`, `OFFICE`, `RETAIL`, `INDUSTRIAL`, `MIXED_USE`, `HOSPITALITY`, `DATA_CENTERS`, `SELF_STORAGE`, `HEALTHCARE`, `STUDENT_HOUSING`, `SENIOR_LIVING`, `AGRICULTURAL`, `PARKING`, `OTHER`.
 
-## Tokenomics
+## Token terms (`tokenomics`: per-asset token terms; not a Commertize token)
 
-| Field | Meaning |
+Sponsor-entered record fields: informational; no offering is open on Commertize today.
+
+| Field | Record meaning |
 |---|---|
-| `totalTokenSupply` | All tokens minted for the asset |
-| `tokensForInvestors` | Tokens available in this offering |
-| `tokensForSponsor` | Tokens retained by the sponsor |
-| `tokensForTreasury` | Tokens held in the platform treasury |
-| `tokenPrice` | Price per token in the offering currency |
-| `minInvestmentTokens` | Minimum tokens per subscription |
-| `maxInvestmentTokens` | Per-investor cap; absent means none disclosed |
-| `lockupMonths` | Post-purchase transfer restriction, in months |
+| `totalTokenSupply` | Total token count the sponsor entered for the asset |
+| `tokensForInvestors` | Token count the sponsor allocated to outside holders |
+| `tokensForSponsor` | Token count the sponsor entered as retained |
+| `tokensForTreasury` | Token count the sponsor entered as treasury |
+| `tokenPrice` | Per-token price figure the sponsor entered |
+| `minInvestmentTokens` | Minimum-quantity figure the sponsor entered |
+| `maxInvestmentTokens` | Per-holder cap the sponsor entered; absent means none disclosed |
+| `lockupMonths` | Transfer-restriction period the sponsor entered, in months |
 
-Offering size = `tokensForInvestors x tokenPrice`. That is the figure the escrow
-contract is deployed against, so use it rather than `totalTokenSupply x tokenPrice`
-(which is an implied valuation of the whole asset, not the amount being raised).
+Report these fields as entered. Some surfaces (the MCP server's `derived` block, and the trailing fields of `/api/listings`) return arithmetic on these fields, such as `target_raise`, `min_investment_amount`, an implied equity valuation and a cap rate. Report them as returned and label each one as arithmetic on sponsor-entered figures. None is an amount being raised, a minimum anyone can invest, an appraisal or a forecast: no offering is open on Commertize today. Do not compute any of them yourself where the surface does not return them.
 
 ## SPV leverage disclosure
 
-A token is a membership interest in the SPV that holds the asset. If the SPV carries
-debt, the token tracks the equity residual, so the debt ratio is material.
+A token is designed to represent an interest in the SPV that holds the asset. If the SPV carries debt, that interest sits behind the debt, so the debt ratio matters.
 
-The sponsor discloses an outstanding debt **amount**; the ratio is always derived,
-never accepted as a self-reported percentage:
+The sponsor discloses an outstanding debt **amount**. The ratio is always derived. A self-reported percentage is never accepted:
 
 ```
 ratio = spvDebtAmount / assetValue
@@ -69,18 +72,12 @@ assetValue = currentAppraisalValue        if > 0
 
 Rules:
 
-- No disclosed debt amount, or no usable asset value, means **"Not disclosed"**. It
-  does **not** mean unlevered. Never render it as 0%.
-- A disclosed `0` is a disclosure and is a real 0% ratio.
-- The ratio is not clamped. A value above 1.0 means disclosed debt exceeds the stated
-  asset value — which is exactly the thing a reader needs to see.
+- No disclosed debt amount, or no usable asset value, means **"Not disclosed"**. It does **not** mean unlevered. Never show it as 0%.
+- A disclosed `0` is a disclosure, and it is a real 0% ratio.
+- The ratio is not clamped. A value above 1.0 means the disclosed debt exceeds the stated asset value, and a reader needs to see that.
 
-Note: the public list endpoint does not carry the debt field, so leverage is
-"Not disclosed" for every public listing. If the field appears, treat it as
-additive, not as a change in meaning.
+Note: the public list endpoint does not carry the debt field, so leverage is "Not disclosed" for every public record. If the field appears later, treat it as an addition, not as a change in meaning.
 
 ## Honest nulls
 
-Across the whole surface: an absent or `null` field means the value has not been
-disclosed. It is never a zero, never an average, and never something to fill in from a
-comparable asset. Say "not disclosed".
+This applies to the whole surface. An absent or `null` field means the value has not been disclosed. It is never a zero, never an average, and never something to fill in from a comparable asset. Say "not disclosed".

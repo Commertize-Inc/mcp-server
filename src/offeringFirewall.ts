@@ -92,7 +92,7 @@ export const publishableOfferingIds =
 
 /** The message a refusing tool returns. One sentence, one place. */
 export const FIREWALL_UNAVAILABLE_MESSAGE =
-	"The offering firewall could not be consulted, so no offering data is returned. Which offerings may be published to a machine reader is decided by the Commertize backend at GET /api/venue/instruments; when that answer is unavailable this server withholds everything rather than serving the ungated marketplace feed. Retry shortly.";
+	"The offering firewall could not be consulted, so no offering data is returned. Which offerings may be published to a machine reader is decided by the Commertize backend at GET /api/venue/instruments; when that answer is unavailable this server withholds everything rather than serving the ungated listings feed. Retry shortly.";
 
 /** Stated in every gated payload, so a reader knows the set is a subset. */
 export const FIREWALL_NOTE =

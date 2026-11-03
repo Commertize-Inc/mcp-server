@@ -24,6 +24,5 @@ export const PROJECTION_NOTE =
  * an agent reading this data is doing research, not receiving an offer.
  */
 export const RULE_506B_NOTE =
-	"This offering is structured under Rule 506(b), which does not permit general solicitation. " +
-	"This record is informational reference data, not an offer, and participation requires an " +
-	"existing relationship plus investor verification.";
+	"The sponsor has named Rule 506(b) for this asset, which does not permit general solicitation. " +
+	"This record is informational reference data, not an offer; no offering is open on Commertize today.";

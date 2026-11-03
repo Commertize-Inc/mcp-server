@@ -17,6 +17,8 @@ https://github.com/Commertize-Inc/mcp-server (`git clone`, `npm ci`, `npm run bu
 | `get_article` | `slug` | `article` with `content_text` (markup stripped) |
 | `platform_info` | — | `markdown`, `capabilities` |
 
+`list_offerings` and `get_offering` (and their `offering`, `offerings` and `offering_id` fields) are historical names. They read listing records, which are informational only; no offering is open on Commertize today.
+
 ## Response envelope
 
 Every response, success or failure, carries:
@@ -34,15 +36,15 @@ served; the data is real but old, and `as_of` says how old.
 
 ## Reading the output honestly
 
-- `null` means not disclosed. Every null field is also named in the offering's
+- `null` means not disclosed. Every null field is also named in the record's
   `not_disclosed` array.
-- `tokenomics.*` are sponsor disclosures.
+- `tokenomics.*` (per-asset token terms; not a Commertize token) are sponsor-entered record fields.
 - `derived.*` are computed from those disclosures by the server (`target_raise`,
   `min_investment_amount`, and the platform's own derived valuation and cap rate).
 - `projections.*` are forward-looking sponsor estimates and carry a note saying so.
 - `spv_leverage: null` with `spv_leverage_display: "Not disclosed"` is not zero
   leverage.
-- `status.accepting_investment` is `true` only for `ACTIVE`.
+- `status.accepting_investment` (MCP only) is always `false`; no offering is open on Commertize today.
 
 ## Error codes
 
@@ -52,9 +54,9 @@ served; the data is real but old, and `as_of` says how old.
 | `UPSTREAM_TIMEOUT` | API did not respond in time | Yes |
 | `UPSTREAM_ERROR` | API returned a non-2xx status | Only for 5xx / 429 |
 | `UPSTREAM_BAD_BODY` | API returned a body that is not valid JSON | Yes |
-| `NOT_FOUND` | Unknown offering id or article slug | No |
-| `TOOL_DISABLED` | Offering tools disabled on this instance | No |
+| `NOT_FOUND` | Unknown listing record id or article slug | No |
+| `TOOL_DISABLED` | Listing-record tools (`list_offerings`, `get_offering`) disabled on this instance | No |
 
 An error response never returns partial or invented data: lists come back empty and
-objects come back `null`, with `isError` set. Never report "no offerings" from an
+objects come back `null`, with `isError` set. Never report "no listings" from an
 error response.

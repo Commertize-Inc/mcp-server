@@ -28,10 +28,10 @@ resetCounters();
 section("certified strings, byte-exact");
 {
 	check("title line is '# ' + apx-63c25d432e", lines[0].startsWith("# ") && apx(lines[0].slice(2)) === "apx-63c25d432e", lines[0]);
-	check("description line is apx-2965904744", lines.some((l) => apx(l) === "apx-2965904744"));
-	check("disclaimer line is apx-92c1f4514d", lines.some((l) => apx(l) === "apx-92c1f4514d"));
+	check("description line is apx-a8691f57fd (AXIOM R4 2026-11-03)", lines.some((l) => apx(l) === "apx-a8691f57fd"));
+	check("old top disclaimer apx-92c1f4514d is gone (AXIOM 2026-11-03: one disclaimer per README)", !lines.some((l) => apx(l) === "apx-92c1f4514d"));
 	const pkg = JSON.parse(await readFile(path.join(ROOT, "package.json"), "utf8"));
-	check("package.json description is apx-2965904744", apx(pkg.description) === "apx-2965904744", pkg.description);
+	check("package.json description is apx-a8691f57fd", apx(pkg.description) === "apx-a8691f57fd", pkg.description);
 }
 
 section("tool table = working default tools");
@@ -90,8 +90,8 @@ section("AXIOM R3: no parked or gated surface, no key, no extra links");
 	check("no 'anonymous mode' sentence (R3-a; false once /mcp/public exists)", !/anonymous mode/i.test(README));
 	check("no Public API link line (R3-c)", !lines.some((l) => l.startsWith("- Public API:")));
 	const testsText =
-		"Runs the offline suites. The live-network suite is opt-in: `COMMERTIZE_MCP_LIVE_TESTS=1 npm test`, or\n`npm run test:live` on its own.";
-	check("tests paragraph is apx-26d3e728af (R3-d)", apx(testsText) === "apx-26d3e728af" && README.includes(`\n${testsText}\n`));
+		"Runs the offline suites. The network test suite (calls the public API) is opt-in: `COMMERTIZE_MCP_LIVE_TESTS=1 npm test`, or\n`npm run test:live` on its own.";
+	check("tests paragraph is apx-b5a2e21505 (R3-d, AXIOM R3 2026-11-03)", apx(testsText) === "apx-b5a2e21505" && README.includes(`\n${testsText}\n`));
 	check("closing line is apx-c570061e40 (R3-e)", lines.some((l) => apx(l) === "apx-c570061e40"));
 	check("License line is apx-9706e81edd", lines.some((l) => apx(l) === "apx-9706e81edd"));
 	check("Privacy link is apx-e6bdd33092", lines.some((l) => apx(l) === "apx-e6bdd33092"));

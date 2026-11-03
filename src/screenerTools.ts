@@ -161,7 +161,7 @@ export const registerScreenerTools = (server: McpServer): void => {
 		{
 			title: "Screen Commertize offerings by criteria",
 			description:
-				"Screen the public Commertize offering set: free-text search plus asset class, geography, status and exemption filters, plus inclusive min/max ranges on cap rate, year-1 cash-on-cash, target IRR, equity multiple, hold period, lockup, offering size, minimum ticket and SPV leverage, with sorting on any numeric field. Rates are DECIMAL FRACTIONS (0.06 = 6%). Undisclosed values never match a range filter and are returned in `excluded_not_disclosed` rather than silently dropped; `field_coverage` reports how many candidates disclose each figure at all, so an empty result is explainable. Public data only, filters narrow the public set and never widen it. Informational reference data — not an offer, solicitation, or recommendation.",
+				"Screen the public Commertize listing records: free-text search plus asset class, geography, status and exemption filters, plus inclusive min/max ranges on cap rate, year-1 cash-on-cash, target IRR, equity multiple, hold period, lockup, target_raise and min_investment_amount (arithmetic on sponsor-entered fields) and SPV leverage, with sorting on any numeric field. Rates are DECIMAL FRACTIONS (0.06 = 6%). Undisclosed values never match a range filter and are returned in `excluded_not_disclosed` rather than silently dropped; `field_coverage` reports how many candidates disclose each figure at all, so an empty result is explainable. Public data only, filters narrow the public set and never widen it. No offering is open on Commertize today. Informational reference data — not an offer, solicitation, or recommendation.",
 			inputSchema: {
 				query: z
 					.string()
@@ -205,7 +205,7 @@ export const registerScreenerTools = (server: McpServer): void => {
 					.boolean()
 					.optional()
 					.describe(
-						"True selects only offerings open to new subscriptions (status ACTIVE)."
+						"Kept for schema stability. Every record returns false, so true matches nothing: no offering is open on Commertize today."
 					),
 				...rangeArgShape(),
 				sort_by: z
@@ -334,7 +334,7 @@ export const registerScreenerTools = (server: McpServer): void => {
 		{
 			title: "Compare Commertize offerings side by side",
 			description:
-				"Align two to five public offerings field by field: asset class, geography, status, exemption, sponsor, tokenomics, derived offering size, SPV leverage and sponsor projections. Each row reports how many of the compared offerings disclose the field, whether they agree, and whether only some disclose it. Two nulls are reported as two absences, never as agreement. Ids come from list_offerings or search_offerings. Informational reference data — not an offer, solicitation, or recommendation.",
+				"Align two to five public listing records field by field: asset class, geography, status, exemption, sponsor, token terms, `target_raise` (arithmetic on sponsor-entered fields), SPV leverage and sponsor projections. Each row reports how many of the compared offerings disclose the field, whether they agree, and whether only some disclose it. Two nulls are reported as two absences, never as agreement. Ids come from list_offerings or search_offerings. Informational reference data — not an offer, solicitation, or recommendation.",
 			inputSchema: {
 				offering_ids: z
 					.array(z.string().min(1))
@@ -418,7 +418,7 @@ export const registerScreenerTools = (server: McpServer): void => {
 	server.registerTool(
 		"list_sponsors",
 		{
-			title: "List sponsors on the Commertize marketplace",
+			title: "List sponsors with public listing records on Commertize",
 			description:
 				"Every sponsor with a public offering on Commertize, with what they have listed here: offering count, breakdown by status and asset class, states, and the summed target raise across only those offerings that disclose one. This is an INVENTORY OF PLATFORM LISTINGS, not a track record: no prior-deal, realized-return, AUM or principal data exists on any public Commertize endpoint, and every response names what is unavailable. Informational reference data — not an offer, solicitation, or recommendation.",
 			inputSchema: {},

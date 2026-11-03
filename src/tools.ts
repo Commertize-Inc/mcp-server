@@ -173,9 +173,9 @@ export const registerTools = (
 	server.registerTool(
 		"list_offerings",
 		{
-			title: "List Commertize marketplace offerings",
+			title: "List Commertize listing records",
 			description:
-				"List the real-world-asset offerings currently on the Commertize marketplace, with public terms: asset class, location, status, exemption, sponsor, tokenomics, and derived offering size. Public data only; no authentication. Filters are applied to the public set, they do not widen it. Informational reference data — not an offer, solicitation, or recommendation.",
+				"List Commertize's public listing records for real-world assets (informational only; no offering is open on Commertize today), with public record fields: asset class, location, status, exemption code, sponsor, `tokenomics` (per-asset token terms; not a Commertize token), and `target_raise` (arithmetic on sponsor-entered fields). The tool name `list_offerings` is historical; it reads listing records. Public data only; no authentication. Filters are applied to the public set, they do not widen it. Informational reference data — not an offer, solicitation, or recommendation.",
 			inputSchema: {
 				status: z
 					.enum(["ACTIVE", "FULLY_FUNDED", "TOKENIZING"])
@@ -199,16 +199,16 @@ export const registerTools = (
 					.min(1)
 					.max(100)
 					.optional()
-					.describe("Maximum number of offerings to return. Default: all."),
+					.describe("Maximum number of listing records to return. Default: all."),
 			},
 			outputSchema: {
 				...envelopeShape,
 				offerings: z.array(offeringSchema),
-				count: z.number().describe("Number of offerings returned after filtering."),
+				count: z.number().describe("Number of listing records returned after filtering."),
 				total_available: z
 					.number()
 					.describe(
-						"Number of offerings in the set this server may publish, before the caller's own filters. NOT the size of the marketplace — offerings outside the Rule 506(c) set are withheld and are not counted here."
+						"Number of listing records in the set this server may publish, before the caller's own filters. NOT the total number of records: records outside the set the backend publishes to machine readers are withheld and are not counted here."
 					),
 				firewall: z
 					.object({
@@ -223,7 +223,7 @@ export const registerTools = (
 						as_of: z.string(),
 					})
 					.describe(
-						"Which offerings this server may publish is decided by the Commertize backend, not here. This states the authority, when it was read, and how much it withheld."
+						"Which listing records this server may publish is decided by the Commertize backend, not here. This states the authority, when it was read, and how much it withheld."
 					),
 			},
 			annotations: { readOnlyHint: true, openWorldHint: true },
@@ -294,14 +294,14 @@ export const registerTools = (
 	server.registerTool(
 		"get_offering",
 		{
-			title: "Get one Commertize offering",
+			title: "Get one Commertize listing record",
 			description:
-				"Full PUBLIC detail for a single offering by id, including tokenomics and the SPV leverage disclosure where the sponsor has provided one. The complete listing record (documents, sponsor diligence, street address, funding progress) is authenticated and is NOT available through this server. Informational reference data — not an offer, solicitation, or recommendation.",
+				"Full PUBLIC detail for a single listing record by id (informational only; no offering is open on Commertize today), including `tokenomics` (per-asset token terms; not a Commertize token) and the SPV leverage disclosure where the sponsor has provided one. The complete listing record (documents, sponsor diligence, street address, funding progress) is authenticated and is NOT available through this server. Informational reference data — not an offer, solicitation, or recommendation.",
 			inputSchema: {
 				offering_id: z
 					.string()
 					.min(1)
-					.describe("Offering UUID, as returned by list_offerings."),
+					.describe("Listing record UUID, as returned by list_offerings."),
 			},
 			outputSchema: {
 				...envelopeShape,
@@ -324,7 +324,7 @@ export const registerTools = (
 						as_of: z.string(),
 					})
 					.describe(
-						"Which offerings this server may publish is decided by the Commertize backend, not here. This states the authority, when it was read, and how much it withheld."
+						"Which listing records this server may publish is decided by the Commertize backend, not here. This states the authority, when it was read, and how much it withheld."
 					),
 			},
 			annotations: { readOnlyHint: true, openWorldHint: true },
@@ -384,9 +384,9 @@ export const registerTools = (
 	server.registerTool(
 		"get_news",
 		{
-			title: "Get Commertize news and market commentary",
+			title: "Get Commertize news",
 			description:
-				"Published news and market commentary from Commertize: tokenization, real-world assets, digital capital markets infrastructure, and regulation. Returns headlines and summaries; use get_article for a full body. Commertize's own editorial view, not independent research.",
+				"Published news from Commertize on tokenization, real-world assets, agentic commerce, and regulation. Returns headlines and summaries; use get_article for a full body. Commertize's own editorial view, not independent research.",
 			inputSchema: {
 				limit: z
 					.number()
@@ -558,7 +558,7 @@ export const registerTools = (
 		{
 			title: "About Commertize",
 			description:
-				"Curated reference text an agent should read before using the other tools: what Commertize is, what it lists, how offerings are structured, how investor and sponsor verification works, and exactly what agents can and cannot do through public interfaces. Static text, not live data.",
+				"Curated reference text an agent should read before using the other tools: what Commertize is, what it lists, how an asset is typically structured, and exactly what agents can and cannot do through public interfaces. Static text, not live data.",
 			inputSchema: {},
 			outputSchema: {
 				...envelopeShape,
@@ -712,7 +712,7 @@ server.registerTool(
 			offering_id: z
 				.string()
 				.min(1)
-				.describe("Offering UUID, as returned by list_offerings."),
+				.describe("Listing record UUID, as returned by list_offerings."),
 		},
 		outputSchema: {
 			...envelopeShape,

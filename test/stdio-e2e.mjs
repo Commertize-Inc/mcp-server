@@ -108,7 +108,7 @@ section("platform_info");
 	check(
 		"platform_info: markdown is the curated file",
 		typeof payload.markdown === "string" &&
-			payload.markdown.includes("Commertize is a digital capital markets platform")
+			payload.markdown.includes("Commertize builds infrastructure for tokenizing real-world assets")
 	);
 	// CHANGED 2026-09-02 to false (a write tool existed), and BACK to true on
 	// 2026-09-10: that write's route is not mounted in production, so against
@@ -128,7 +128,7 @@ section("platform_info");
 	check(
 		"platform_info: states agents cannot transact",
 		(payload.markdown ?? "").includes(
-			"No tool in this server can transact"
+			"This server has no write tool."
 		)
 	);
 	// Positive control for the empty WRITE_TOOLS list: every tool this server
@@ -161,10 +161,8 @@ let sampleId = null;
 	check("offering: has a name", typeof o?.name === "string");
 	check("offering: status carries a label", typeof o?.status?.label === "string");
 	check(
-		"offering: accepting_investment is false for non-ACTIVE",
-		payload.offerings.every(
-			(x) => x.status.accepting_investment === (x.status.code === "ACTIVE")
-		)
+		"offering: accepting_investment is always false (AXIOM 4-1(a) 2026-11-03)",
+		payload.offerings.every((x) => x.status.accepting_investment === false)
 	);
 	check(
 		"offering: street address never present",

@@ -108,7 +108,7 @@ section("platform_info");
 	check(
 		"platform_info: markdown is the curated file",
 		typeof payload.markdown === "string" &&
-			payload.markdown.includes("Commertize is a digital capital markets platform")
+			payload.markdown.includes("Commertize builds infrastructure for tokenizing real-world assets")
 	);
 	// CHANGED 2026-09-02 to false (a write tool existed), and BACK to true on
 	// 2026-09-10: that write's route is not mounted in production, so against

@@ -1,8 +1,6 @@
 # Commertize Agents
 
-Commertize is infrastructure for tokenizing real-world assets and for agentic commerce. This MCP server lets an AI client read Commertize's public news feed. It runs locally over stdio and needs no account.
-
-This listing is reference information. It is not an offer to sell or a solicitation of an offer to buy any security.
+Commertize is infrastructure for tokenizing real-world assets and for agentic commerce. This MCP server lets an AI client read Commertize's public information: published news, a short reference text about the platform, and public listing data, which is informational only. It runs locally over stdio, needs no account, and cannot transact.
 
 ## Tools
 
@@ -68,7 +66,7 @@ npx @modelcontextprotocol/inspector node dist/index.js
 npm test
 ```
 
-Runs the offline suites. The live-network suite is opt-in: `COMMERTIZE_MCP_LIVE_TESTS=1 npm test`, or
+Runs the offline suites. The network test suite (calls the public API) is opt-in: `COMMERTIZE_MCP_LIVE_TESTS=1 npm test`, or
 `npm run test:live` on its own.
 
 ## License
@@ -84,4 +82,4 @@ Apache-2.0. See [LICENSE](LICENSE).
 
 Nothing in this repository, or returned by any tool in it, is an offer, a solicitation, or a recommendation to buy or sell any security, or investment, legal, or tax advice.
 
-Informational only. Not an offer to sell or a solicitation to buy any security. Features marked testnet are not live.
+Features marked testnet are not live.
